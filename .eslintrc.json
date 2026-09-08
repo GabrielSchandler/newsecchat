@@ -1,0 +1,8 @@
+{
+  "extends": ["next/core-web-vitals", "next/typescript"],
+  "rules": {
+    "@typescript-eslint/no-explicit-any": "error",
+    "no-console": ["error", { "allow": ["warn", "error"] }]
+  },
+  "ignorePatterns": ["node_modules", ".next", "out", "supabase/esquema-completo.sql"]
+}

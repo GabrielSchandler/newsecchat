@@ -1,0 +1,38 @@
+# Dependências
+/node_modules
+/.pnp
+.pnp.js
+
+# Build
+/.next/
+/out/
+/build
+next-env.d.ts
+tsconfig.tsbuildinfo
+
+# Segredos — NUNCA versionar
+.env
+.env.local
+.env*.local
+.env.production
+
+# Esquema gerado (regenerado por `npm run banco:montar`)
+/supabase/esquema-completo.sql
+
+# Sistema operacional
+.DS_Store
+Thumbs.db
+
+# Editores
+.vscode/*
+!.vscode/extensions.json
+.idea
+
+# Log e cobertura
+*.log
+npm-debug.log*
+/coverage
+/.vitest
+
+# Docker
+/dados-redis

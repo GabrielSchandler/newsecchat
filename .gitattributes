@@ -1,0 +1,15 @@
+# Normalização de fim de linha.
+* text=auto eol=lf
+
+# Scripts do Windows PRECISAM de CRLF: gravados com LF, o cmd.exe falha
+# com erros sem sentido, do tipo "'M' não é reconhecido como um comando".
+*.bat text eol=crlf
+*.cmd text eol=crlf
+*.ps1 text eol=crlf
+
+# Binários
+*.png binary
+*.jpg binary
+*.webp binary
+*.ico binary
+*.pdf binary

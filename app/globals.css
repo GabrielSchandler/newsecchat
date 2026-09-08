@@ -1,0 +1,95 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/*
+ * Identidade NewSec aplicada a uma ferramenta de trabalho.
+ *
+ * A escolha central: a barra lateral é escura (a marca), a área de
+ * trabalho é clara. O operador passa o dia inteiro nesta tela lendo
+ * texto — fundo claro cansa menos para leitura longa, e o escuro fica
+ * onde ele não lê, só navega.
+ *
+ * O vermelho da marca é reservado para erro, alerta e destaque de marca.
+ * A cor de ação é o verde-petróleo: um botão vermelho em cada linha da
+ * tela vira ruído e some justamente quando precisa chamar atenção.
+ */
+
+@layer base {
+  :root {
+    --raio: 8px;
+  }
+
+  * {
+    @apply border-bruma-200;
+  }
+
+  html {
+    -webkit-text-size-adjust: 100%;
+  }
+
+  body {
+    @apply bg-tela text-tinta-900 antialiased;
+    font-feature-settings: 'cv02', 'cv03', 'cv04';
+  }
+
+  /* Foco visível sempre: quem opera o dia inteiro usa teclado. */
+  :focus-visible {
+    @apply outline-none ring-2 ring-produto-700 ring-offset-2 ring-offset-white;
+  }
+
+  ::selection {
+    @apply bg-produto-100 text-produto-800;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.001ms !important;
+      transition-duration: 0.001ms !important;
+    }
+  }
+}
+
+@layer components {
+  /* Barra de rolagem discreta nas colunas da central. */
+  .rolagem-fina {
+    scrollbar-width: thin;
+    scrollbar-color: theme('colors.bruma.300') transparent;
+  }
+
+  .rolagem-fina::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+
+  .rolagem-fina::-webkit-scrollbar-thumb {
+    @apply rounded-full bg-bruma-300;
+  }
+
+  .rolagem-fina::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  /* Balão de mensagem. */
+  .balao {
+    @apply max-w-[min(560px,78%)] whitespace-pre-wrap break-words rounded-lg px-3 py-2 text-[13.5px] leading-relaxed;
+  }
+
+  .balao-entrada {
+    @apply bg-white text-tinta-900 shadow-[0_1px_2px_rgba(11,11,13,0.06)];
+  }
+
+  .balao-saida-humano {
+    @apply bg-produto-700 text-white;
+  }
+
+  .balao-saida-ia {
+    @apply bg-tinta-800 text-bruma-100;
+  }
+
+  .balao-sistema {
+    @apply mx-auto max-w-[80%] bg-bruma-200 text-center text-xs text-tinta-700;
+  }
+}

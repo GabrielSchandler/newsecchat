@@ -1,0 +1,47 @@
+# =====================================================================
+# Imagem do worker.
+#
+# O worker compartilha o código de `lib/` com a aplicação web, mas roda
+# como processo Node comum — por isso a imagem instala as dependências do
+# mesmo package.json e executa `trabalhador/principal.ts` via tsx.
+#
+# Sem build do Next: o worker não tem tela.
+# =====================================================================
+
+FROM node:22-alpine AS dependencias
+
+WORKDIR /app
+
+# Só os manifestos primeiro: enquanto eles não mudarem, o Docker reusa a
+# camada de node_modules e o build fica em segundos.
+COPY package.json package-lock.json ./
+
+# `--ignore-scripts` evita que um pacote qualquer rode script de
+# instalação com acesso à imagem.
+RUN npm ci --ignore-scripts
+
+
+FROM node:22-alpine AS producao
+
+WORKDIR /app
+
+ENV NODE_ENV=production
+
+# Fuso do container. Sem isto, log em UTC e depuração mais difícil — o
+# cálculo de janela de campanha não depende disto (usa o fuso da
+# organização), mas ler log na hora certa ajuda.
+ENV TZ=America/Sao_Paulo
+
+RUN apk add --no-cache tzdata
+
+COPY --from=dependencias /app/node_modules ./node_modules
+COPY package.json tsconfig.json ./
+COPY lib ./lib
+COPY trabalhador ./trabalhador
+
+# Não roda como root: se algo for comprometido, o estrago fica menor.
+USER node
+
+# `tini` não é necessário: o Node 22 propaga SIGTERM, e o worker fecha as
+# filas com calma no encerramento (ver trabalhador/principal.ts).
+CMD ["npx", "tsx", "trabalhador/principal.ts"]

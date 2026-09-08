@@ -1,0 +1,695 @@
+'use client';
+
+import * as React from 'react';
+import { useRouter } from 'next/navigation';
+import { toast } from 'sonner';
+import {
+  AlertTriangle,
+  ArrowRightLeft,
+  Bot,
+  Check,
+  CheckCheck,
+  Clock,
+  Hand,
+  Lock,
+  RotateCcw,
+  Send,
+  StickyNote,
+  XCircle,
+} from 'lucide-react';
+import { Botao } from '@/componentes/ui/botao';
+import { AreaTexto, Campo, Selecao } from '@/componentes/ui/campo';
+import { Selo } from '@/componentes/ui/estrutura';
+import {
+  ConteudoDialogo,
+  CorpoDialogo,
+  Dialogo,
+  RodapeDialogo,
+} from '@/componentes/ui/dialogo';
+import { cn, formatarHora, formatarDataHora } from '@/lib/utilitarios';
+import { formatarTelefone } from '@/lib/nucleo/telefone';
+import { rotuloEstado } from '@/lib/nucleo/estados';
+import type { Mensagem } from '@/lib/tipos-banco';
+import type { ApoioAtendimento, DetalheConversa } from './tipos';
+import {
+  adicionarNota,
+  assumirConversa,
+  devolverParaIa,
+  encerrarConversa,
+  enviarMensagemManual,
+  marcarComoLida,
+  reabrirConversa,
+  transferirConversa,
+} from './acoes';
+import { useTempoReal } from './tempo-real';
+
+export function PainelConversa({
+  detalhe,
+  apoio,
+  meuMembroId,
+  organizacaoId,
+}: {
+  detalhe: DetalheConversa;
+  apoio: ApoioAtendimento;
+  meuMembroId: string;
+  organizacaoId: string;
+}) {
+  const roteador = useRouter();
+  const { conversa, contato } = detalhe;
+
+  const [mensagens, definirMensagens] = React.useState<Mensagem[]>(detalhe.mensagens);
+  const [texto, definirTexto] = React.useState('');
+  const [enviando, definirEnviando] = React.useState(false);
+  const [ocupado, definirOcupado] = React.useState(false);
+  const fim = React.useRef<HTMLDivElement>(null);
+
+  // Trocou de conversa: recomeça a lista com o que veio do servidor.
+  React.useEffect(() => {
+    definirMensagens(detalhe.mensagens);
+    definirTexto('');
+  }, [detalhe.mensagens, conversa.id]);
+
+  const aoChegarMensagem = React.useCallback((nova: Mensagem) => {
+    definirMensagens((atuais) => {
+      const indice = atuais.findIndex((item) => item.id === nova.id);
+      if (indice >= 0) {
+        const copia = atuais.slice();
+        copia[indice] = nova;
+        return copia;
+      }
+      return [...atuais, nova];
+    });
+  }, []);
+
+  const { conectado } = useTempoReal({ organizacaoId, conversaId: conversa.id, aoChegarMensagem });
+
+  React.useEffect(() => {
+    fim.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
+  }, [mensagens.length]);
+
+  React.useEffect(() => {
+    if (conversa.nao_lidas > 0) void marcarComoLida(conversa.id);
+  }, [conversa.id, conversa.nao_lidas]);
+
+  const minha = conversa.responsavel_id === meuMembroId;
+  const encerrada = conversa.estado === 'ENCERRADA';
+  const comOutro = conversa.estado === 'HUMANO' && !minha && Boolean(conversa.responsavel_id);
+  const nome = contato.nome || contato.nome_perfil_whatsapp || formatarTelefone(contato.telefone);
+
+  async function executar(acao: () => Promise<{ ok: boolean; erro?: string; aviso?: string }>) {
+    definirOcupado(true);
+    try {
+      const resultado = await acao();
+      if (!resultado.ok) {
+        toast.error(resultado.erro ?? 'Não foi possível concluir a ação.');
+        return false;
+      }
+      if (resultado.aviso) toast.warning(resultado.aviso);
+      roteador.refresh();
+      return true;
+    } catch {
+      toast.error('Falha de comunicação com o servidor.');
+      return false;
+    } finally {
+      definirOcupado(false);
+    }
+  }
+
+  async function aoEnviar(evento: React.FormEvent) {
+    evento.preventDefault();
+    const conteudo = texto.trim();
+    if (!conteudo || enviando) return;
+
+    definirEnviando(true);
+
+    // Otimista: o balão aparece agora. Se o envio falhar, ele sai e o
+    // texto volta para a caixa — em vez de sumir sem explicação.
+    const provisoria: Mensagem = {
+      id: `provisoria-${Date.now()}`,
+      organizacao_id: organizacaoId,
+      conversa_id: conversa.id,
+      contato_id: contato.id,
+      canal_id: conversa.canal_id,
+      direcao: 'SAIDA',
+      autor: 'ATENDENTE',
+      autor_membro_id: meuMembroId,
+      tipo: 'TEXTO',
+      conteudo,
+      arquivo_id: null,
+      identificador_externo: null,
+      chave_idempotencia: null,
+      status: 'PENDENTE',
+      erro: null,
+      respondendo_id: null,
+      campanha_id: null,
+      metadados: {},
+      criado_em: new Date().toISOString(),
+      enviado_em: null,
+    };
+
+    definirMensagens((atuais) => [...atuais, provisoria]);
+    definirTexto('');
+
+    try {
+      const resultado = await enviarMensagemManual({ conversaId: conversa.id, texto: conteudo });
+
+      if (!resultado.ok) {
+        definirMensagens((atuais) => atuais.filter((item) => item.id !== provisoria.id));
+        definirTexto(conteudo);
+        toast.error(resultado.erro ?? 'Não foi possível enviar.');
+        return;
+      }
+
+      if (resultado.aviso) toast.warning(resultado.aviso);
+      roteador.refresh();
+    } catch {
+      definirMensagens((atuais) => atuais.filter((item) => item.id !== provisoria.id));
+      definirTexto(conteudo);
+      toast.error('Falha de comunicação com o servidor.');
+    } finally {
+      definirEnviando(false);
+    }
+  }
+
+  return (
+    <section className="flex h-full min-w-0 flex-col bg-tela">
+      <header className="flex flex-wrap items-center justify-between gap-2 border-b border-bruma-200 bg-white px-4 py-2.5">
+        <div className="min-w-0">
+          <div className="flex items-center gap-2">
+            <h2 className="truncate text-[15px] font-semibold text-tinta-900">{nome}</h2>
+            <SeloEstado estado={conversa.estado} />
+          </div>
+          <p className="mt-0.5 truncate text-[12px] text-bruma-600">
+            {formatarTelefone(contato.telefone)}
+            {detalhe.canal ? ` · ${detalhe.canal.nome}` : ''}
+            {detalhe.responsavelNome ? ` · ${detalhe.responsavelNome}` : ''}
+            {detalhe.campanhaNome ? ` · veio da campanha "${detalhe.campanhaNome}"` : ''}
+          </p>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-1.5">
+          {!conectado ? (
+            <span className="mr-1 flex items-center gap-1 text-[11px] text-alerta-700" title="As mensagens novas podem demorar a aparecer.">
+              <AlertTriangle className="h-3 w-3" aria-hidden />
+              sem tempo real
+            </span>
+          ) : null}
+
+          {encerrada ? (
+            <>
+              <Botao
+                variante="secundario"
+                tamanho="pequeno"
+                disabled={ocupado}
+                onClick={() => void executar(() => reabrirConversa(conversa.id, false))}
+              >
+                <RotateCcw className="h-3.5 w-3.5" aria-hidden />
+                Reabrir
+              </Botao>
+              {detalhe.canal?.ia_ativa ? (
+                <Botao
+                  variante="fantasma"
+                  tamanho="pequeno"
+                  disabled={ocupado}
+                  onClick={() => void executar(() => reabrirConversa(conversa.id, true))}
+                >
+                  <Bot className="h-3.5 w-3.5" aria-hidden />
+                  Reabrir com IA
+                </Botao>
+              ) : null}
+            </>
+          ) : (
+            <>
+              {!minha ? (
+                <Botao
+                  tamanho="pequeno"
+                  disabled={ocupado}
+                  onClick={() => void executar(() => assumirConversa(conversa.id))}
+                >
+                  <Hand className="h-3.5 w-3.5" aria-hidden />
+                  Assumir
+                </Botao>
+              ) : null}
+
+              <DialogoTransferir
+                apoio={apoio}
+                ocupado={ocupado}
+                aoConfirmar={(dados) =>
+                  executar(() =>
+                    transferirConversa({
+                      conversaId: conversa.id,
+                      departamentoId: dados.departamentoId,
+                      membroId: dados.membroId,
+                      motivo: dados.motivo,
+                    }),
+                  )
+                }
+              />
+
+              {conversa.estado !== 'IA' && detalhe.canal?.ia_ativa ? (
+                <Botao
+                  variante="fantasma"
+                  tamanho="pequeno"
+                  disabled={ocupado}
+                  onClick={() => void executar(() => devolverParaIa(conversa.id))}
+                  title="A IA volta a responder esta conversa"
+                >
+                  <Bot className="h-3.5 w-3.5" aria-hidden />
+                  Devolver à IA
+                </Botao>
+              ) : null}
+
+              <DialogoNota
+                ocupado={ocupado}
+                aoConfirmar={(nota) =>
+                  executar(() => adicionarNota({ conversaId: conversa.id, texto: nota }))
+                }
+              />
+
+              <DialogoEncerrar
+                ocupado={ocupado}
+                aoConfirmar={(motivo) => executar(() => encerrarConversa(conversa.id, motivo))}
+              />
+            </>
+          )}
+        </div>
+      </header>
+
+      <div className="min-h-0 flex-1 overflow-y-auto rolagem-fina px-4 py-4">
+        <ol className="mx-auto flex max-w-3xl flex-col gap-2">
+          {mensagens.map((mensagem, indice) => (
+            <BalaoMensagem
+              key={mensagem.id}
+              mensagem={mensagem}
+              anterior={mensagens[indice - 1] ?? null}
+            />
+          ))}
+        </ol>
+
+        {detalhe.notas.length ? (
+          <div className="mx-auto mt-6 max-w-3xl rounded-lg border border-alerta-100 bg-alerta-100/30 px-3 py-2.5">
+            <p className="mb-1.5 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-alerta-700">
+              <StickyNote className="h-3 w-3" aria-hidden />
+              Notas internas (o cliente não vê)
+            </p>
+            <ul className="space-y-1.5">
+              {detalhe.notas.map((nota) => (
+                <li key={nota.id} className="text-[12.5px] leading-relaxed text-tinta-800">
+                  <span className="font-medium">{nota.autorNome ?? 'Atendente'}</span>
+                  <span className="text-bruma-500"> · {formatarDataHora(nota.criado_em)}</span>
+                  <p className="whitespace-pre-wrap">{nota.conteudo}</p>
+                </li>
+              ))}
+            </ul>
+          </div>
+        ) : null}
+
+        <div ref={fim} />
+      </div>
+
+      <footer className="border-t border-bruma-200 bg-white px-4 py-3">
+        {encerrada ? (
+          <p className="flex items-center justify-center gap-2 py-2 text-[13px] text-bruma-600">
+            <Lock className="h-3.5 w-3.5" aria-hidden />
+            Conversa encerrada
+            {conversa.encerrada_em ? ` em ${formatarDataHora(conversa.encerrada_em)}` : ''}. Reabra para
+            responder.
+          </p>
+        ) : (
+          <form onSubmit={aoEnviar} className="mx-auto max-w-3xl">
+            {comOutro ? (
+              <p className="mb-2 flex items-center gap-1.5 rounded-lg bg-alerta-100/50 px-2.5 py-1.5 text-[12.5px] text-alerta-700">
+                <AlertTriangle className="h-3.5 w-3.5 shrink-0" aria-hidden />
+                Esta conversa está com {detalhe.responsavelNome ?? 'outro atendente'}. Ao enviar, você
+                assume o atendimento.
+              </p>
+            ) : null}
+
+            {conversa.estado === 'IA' ? (
+              <p className="mb-2 flex items-center gap-1.5 rounded-lg bg-tinta-900 px-2.5 py-1.5 text-[12.5px] text-bruma-200">
+                <Bot className="h-3.5 w-3.5 shrink-0" aria-hidden />
+                A IA está atendendo. Ao enviar uma mensagem, você assume e a IA para de responder.
+              </p>
+            ) : null}
+
+            <div className="flex items-end gap-2">
+              <AreaTexto
+                value={texto}
+                onChange={(evento) => definirTexto(evento.target.value)}
+                onKeyDown={(evento) => {
+                  // Enter envia; Shift+Enter quebra linha — como no WhatsApp.
+                  if (evento.key === 'Enter' && !evento.shiftKey) {
+                    evento.preventDefault();
+                    void aoEnviar(evento);
+                  }
+                }}
+                placeholder="Escreva a resposta…"
+                aria-label="Mensagem"
+                rows={2}
+                maxLength={4000}
+                className="min-h-[44px] resize-none"
+              />
+              <Botao type="submit" carregando={enviando} disabled={!texto.trim()} className="h-[44px]">
+                <Send className="h-4 w-4" aria-hidden />
+                Enviar
+              </Botao>
+            </div>
+
+            {detalhe.canal && (!detalhe.canal.ativo || detalhe.canal.status !== 'CONECTADO') ? (
+              <p className="mt-2 text-[12px] text-alerta-700">
+                O canal “{detalhe.canal.nome}” não está conectado. A mensagem fica na fila e sai quando a
+                conexão voltar.
+              </p>
+            ) : null}
+          </form>
+        )}
+      </footer>
+    </section>
+  );
+}
+
+function SeloEstado({ estado }: { estado: DetalheConversa['conversa']['estado'] }) {
+  const tons = {
+    IA: 'ia',
+    AGUARDANDO_HUMANO: 'alerta',
+    HUMANO: 'produto',
+    AGUARDANDO_CLIENTE: 'neutro',
+    ENCERRADA: 'neutro',
+  } as const;
+
+  return <Selo tom={tons[estado]}>{rotuloEstado[estado]}</Selo>;
+}
+
+function BalaoMensagem({ mensagem, anterior }: { mensagem: Mensagem; anterior: Mensagem | null }) {
+  const daEmpresa = mensagem.direcao === 'SAIDA';
+  const daIa = mensagem.autor === 'IA';
+
+  if (mensagem.autor === 'SISTEMA' && mensagem.tipo === 'SISTEMA') {
+    return (
+      <li className="flex justify-center">
+        <p className="balao balao-sistema">{mensagem.conteudo}</p>
+      </li>
+    );
+  }
+
+  const mudouDeDia =
+    !anterior ||
+    new Date(anterior.criado_em).toDateString() !== new Date(mensagem.criado_em).toDateString();
+
+  return (
+    <>
+      {mudouDeDia ? (
+        <li className="my-2 flex justify-center">
+          <span className="rounded-lg bg-bruma-200 px-2 py-0.5 text-[11px] font-medium text-tinta-700">
+            {new Intl.DateTimeFormat('pt-BR', {
+              day: '2-digit',
+              month: 'long',
+              year: 'numeric',
+              timeZone: 'America/Sao_Paulo',
+            }).format(new Date(mensagem.criado_em))}
+          </span>
+        </li>
+      ) : null}
+
+      <li className={cn('flex', daEmpresa ? 'justify-end' : 'justify-start')}>
+        <div
+          className={cn(
+            'balao',
+            !daEmpresa && 'balao-entrada',
+            daEmpresa && daIa && 'balao-saida-ia',
+            daEmpresa && !daIa && 'balao-saida-humano',
+          )}
+        >
+          {daIa ? (
+            <span className="mb-1 flex items-center gap-1 text-[10px] font-medium uppercase tracking-wide opacity-70">
+              <Bot className="h-3 w-3" aria-hidden />
+              IA
+            </span>
+          ) : null}
+
+          {mensagem.tipo !== 'TEXTO' && mensagem.tipo !== 'SISTEMA' ? (
+            <span className="mb-1 block text-[11px] font-medium opacity-70">
+              {rotuloTipo(mensagem.tipo)}
+            </span>
+          ) : null}
+
+          <span>{mensagem.conteudo || '—'}</span>
+
+          <span
+            className={cn(
+              'mt-1 flex items-center justify-end gap-1 text-[10px] tabular-nums',
+              daEmpresa ? 'opacity-70' : 'text-bruma-500',
+            )}
+          >
+            {formatarHora(mensagem.criado_em)}
+            {daEmpresa ? <IconeStatus status={mensagem.status} /> : null}
+          </span>
+
+          {mensagem.status === 'FALHOU' && mensagem.erro ? (
+            <span className="mt-1 block text-[11px] font-medium text-marca-300">
+              Falha no envio: {mensagem.erro}
+            </span>
+          ) : null}
+        </div>
+      </li>
+    </>
+  );
+}
+
+function rotuloTipo(tipo: Mensagem['tipo']): string {
+  const mapa: Partial<Record<Mensagem['tipo'], string>> = {
+    IMAGEM: '📷 Imagem',
+    AUDIO: '🎤 Áudio',
+    VIDEO: '🎬 Vídeo',
+    DOCUMENTO: '📄 Documento',
+    STICKER: 'Figurinha',
+    LOCALIZACAO: '📍 Localização',
+    CONTATO: '👤 Contato',
+  };
+  return mapa[tipo] ?? '';
+}
+
+function IconeStatus({ status }: { status: Mensagem['status'] }) {
+  if (status === 'PENDENTE' || status === 'ENFILEIRADA') {
+    return <Clock className="h-3 w-3" aria-label="Aguardando envio" />;
+  }
+  if (status === 'ENVIADA') return <Check className="h-3 w-3" aria-label="Enviada" />;
+  if (status === 'ENTREGUE') return <CheckCheck className="h-3 w-3" aria-label="Entregue" />;
+  if (status === 'LIDA') return <CheckCheck className="h-3 w-3 text-produto-100" aria-label="Lida" />;
+  if (status === 'FALHOU') return <XCircle className="h-3 w-3" aria-label="Falhou" />;
+  return null;
+}
+
+function DialogoTransferir({
+  apoio,
+  ocupado,
+  aoConfirmar,
+}: {
+  apoio: ApoioAtendimento;
+  ocupado: boolean;
+  aoConfirmar: (dados: {
+    departamentoId: string | null;
+    membroId: string | null;
+    motivo: string;
+  }) => Promise<boolean>;
+}) {
+  const [aberto, definirAberto] = React.useState(false);
+  const [departamentoId, definirDepartamento] = React.useState('');
+  const [membroId, definirMembro] = React.useState('');
+  const [motivo, definirMotivo] = React.useState('');
+
+  return (
+    <Dialogo open={aberto} onOpenChange={definirAberto}>
+      <Botao variante="secundario" tamanho="pequeno" disabled={ocupado} onClick={() => definirAberto(true)}>
+        <ArrowRightLeft className="h-3.5 w-3.5" aria-hidden />
+        Transferir
+      </Botao>
+
+      <ConteudoDialogo
+        titulo="Transferir conversa"
+        descricao="Escolha o departamento, o atendente, ou os dois. Quem receber vê todo o histórico e o que a IA já apurou."
+      >
+        <CorpoDialogo>
+          <Campo rotulo="Departamento" htmlFor="transferir-departamento">
+            <Selecao
+              id="transferir-departamento"
+              value={departamentoId}
+              onChange={(evento) => definirDepartamento(evento.target.value)}
+            >
+              <option value="">Manter o atual</option>
+              {apoio.departamentos.map((departamento) => (
+                <option key={departamento.id} value={departamento.id}>
+                  {departamento.nome}
+                </option>
+              ))}
+            </Selecao>
+          </Campo>
+
+          <Campo
+            rotulo="Atendente"
+            htmlFor="transferir-membro"
+            ajuda="Sem escolher ninguém, a conversa fica na fila do departamento."
+          >
+            <Selecao
+              id="transferir-membro"
+              value={membroId}
+              onChange={(evento) => definirMembro(evento.target.value)}
+            >
+              <option value="">Deixar na fila</option>
+              {apoio.atendentes.map((atendente) => (
+                <option key={atendente.membroId} value={atendente.membroId}>
+                  {atendente.nome}
+                </option>
+              ))}
+            </Selecao>
+          </Campo>
+
+          <Campo rotulo="Motivo" htmlFor="transferir-motivo" ajuda="Fica no histórico da conversa.">
+            <AreaTexto
+              id="transferir-motivo"
+              value={motivo}
+              onChange={(evento) => definirMotivo(evento.target.value)}
+              rows={2}
+              maxLength={500}
+              placeholder="Ex.: cliente quer falar de prazo processual"
+            />
+          </Campo>
+        </CorpoDialogo>
+
+        <RodapeDialogo>
+          <Botao variante="secundario" onClick={() => definirAberto(false)}>
+            Cancelar
+          </Botao>
+          <Botao
+            disabled={!departamentoId && !membroId}
+            onClick={async () => {
+              const certo = await aoConfirmar({
+                departamentoId: departamentoId || null,
+                membroId: membroId || null,
+                motivo,
+              });
+              if (certo) {
+                definirAberto(false);
+                definirMotivo('');
+              }
+            }}
+          >
+            Transferir
+          </Botao>
+        </RodapeDialogo>
+      </ConteudoDialogo>
+    </Dialogo>
+  );
+}
+
+function DialogoEncerrar({
+  ocupado,
+  aoConfirmar,
+}: {
+  ocupado: boolean;
+  aoConfirmar: (motivo: string) => Promise<boolean>;
+}) {
+  const [aberto, definirAberto] = React.useState(false);
+  const [motivo, definirMotivo] = React.useState('');
+
+  return (
+    <Dialogo open={aberto} onOpenChange={definirAberto}>
+      <Botao variante="fantasma" tamanho="pequeno" disabled={ocupado} onClick={() => definirAberto(true)}>
+        <XCircle className="h-3.5 w-3.5" aria-hidden />
+        Encerrar
+      </Botao>
+
+      <ConteudoDialogo
+        titulo="Encerrar atendimento"
+        descricao="A conversa sai das caixas abertas. Se o cliente escrever de novo, uma conversa nova é aberta — o histórico dele continua inteiro na ficha."
+      >
+        <CorpoDialogo>
+          <Campo rotulo="Como terminou?" htmlFor="encerrar-motivo">
+            <AreaTexto
+              id="encerrar-motivo"
+              value={motivo}
+              onChange={(evento) => definirMotivo(evento.target.value)}
+              rows={3}
+              maxLength={500}
+              placeholder="Ex.: cliente sem interesse no momento"
+            />
+          </Campo>
+        </CorpoDialogo>
+
+        <RodapeDialogo>
+          <Botao variante="secundario" onClick={() => definirAberto(false)}>
+            Cancelar
+          </Botao>
+          <Botao
+            variante="destrutivo"
+            onClick={async () => {
+              const certo = await aoConfirmar(motivo);
+              if (certo) {
+                definirAberto(false);
+                definirMotivo('');
+              }
+            }}
+          >
+            Encerrar
+          </Botao>
+        </RodapeDialogo>
+      </ConteudoDialogo>
+    </Dialogo>
+  );
+}
+
+function DialogoNota({
+  ocupado,
+  aoConfirmar,
+}: {
+  ocupado: boolean;
+  aoConfirmar: (nota: string) => Promise<boolean>;
+}) {
+  const [aberto, definirAberto] = React.useState(false);
+  const [nota, definirNota] = React.useState('');
+
+  return (
+    <Dialogo open={aberto} onOpenChange={definirAberto}>
+      <Botao variante="fantasma" tamanho="pequeno" disabled={ocupado} onClick={() => definirAberto(true)}>
+        <StickyNote className="h-3.5 w-3.5" aria-hidden />
+        Nota
+      </Botao>
+
+      <ConteudoDialogo
+        titulo="Nota interna"
+        descricao="Fica visível só para a equipe. O cliente nunca recebe esse texto."
+      >
+        <CorpoDialogo>
+          <Campo rotulo="Nota" htmlFor="nota-conteudo">
+            <AreaTexto
+              id="nota-conteudo"
+              value={nota}
+              onChange={(evento) => definirNota(evento.target.value)}
+              rows={4}
+              maxLength={2000}
+              placeholder="Ex.: cliente pediu retorno depois das 18h"
+            />
+          </Campo>
+        </CorpoDialogo>
+
+        <RodapeDialogo>
+          <Botao variante="secundario" onClick={() => definirAberto(false)}>
+            Cancelar
+          </Botao>
+          <Botao
+            disabled={!nota.trim()}
+            onClick={async () => {
+              const certo = await aoConfirmar(nota);
+              if (certo) {
+                definirAberto(false);
+                definirNota('');
+              }
+            }}
+          >
+            Salvar nota
+          </Botao>
+        </RodapeDialogo>
+      </ConteudoDialogo>
+    </Dialogo>
+  );
+}
