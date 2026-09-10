@@ -94,9 +94,15 @@ Com o projeto criado, vá em **Project Settings** (a engrenagem) → **API**:
 | `anon` `public` | `NEXT_PUBLIC_SUPABASE_ANON_KEY` |
 | `service_role` `secret` | `SUPABASE_SERVICE_ROLE_KEY` |
 
-Depois vá em **Project Settings** → **Database** → **Connection string**
-→ aba **URI**. Copie o texto e **troque `[YOUR-PASSWORD]` pela senha que
-você guardou**. Esse valor vai em `SUPABASE_DB_URL`.
+Depois clique no botão verde **Connect**, no topo do painel, e escolha
+**Session pooler** — não a *Direct connection*, que só funciona por IPv6 e
+falha na maioria das redes de escritório e no Docker do Windows. Copie o
+texto e **troque `[YOUR-PASSWORD]` pela senha que você guardou**, sem
+acrescentar nada depois de `/postgres`. Esse valor vai em `SUPABASE_DB_URL`.
+
+> Se a senha tiver `@`, `:`, `/`, `#` ou `?`, ela quebra o endereço. Na
+> dúvida, gere uma nova só com letras e números em Project Settings →
+> Database → **Reset database password**.
 
 > ⚠️ A chave `service_role` ignora todas as regras de segurança do banco.
 > Ela nunca deve ser enviada por WhatsApp, colada em chat ou publicada.

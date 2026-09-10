@@ -59,7 +59,12 @@ services:
 
       DATABASE_ENABLED: 'true'
       DATABASE_PROVIDER: postgresql
-      DATABASE_CONNECTION_URI: ${SUPABASE_DB_URL}
+      # `?schema=evolution` põe as tabelas da Evolution num schema próprio.
+      # Sem isso elas nasceriam no `public`, que a Data API do Supabase
+      # expõe para a chave anônima — e, sem RLS, as sessões de WhatsApp
+      # ficariam legíveis pela internet. Por isso a SUPABASE_DB_URL do
+      # .env.local vai SEM parâmetros no final.
+      DATABASE_CONNECTION_URI: ${SUPABASE_DB_URL}?schema=evolution
       DATABASE_CONNECTION_CLIENT_NAME: evolution
 
       DATABASE_SAVE_DATA_INSTANCE: 'true'
