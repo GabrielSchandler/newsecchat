@@ -73,7 +73,18 @@ services:
       DATABASE_CONNECTION_CLIENT_NAME: evolution
 
       DATABASE_SAVE_DATA_INSTANCE: 'true'
-      DATABASE_SAVE_DATA_NEW_MESSAGE: 'false'
+      # 'true' de propósito, ao contrário das quatro linhas abaixo: é o que
+      # faz /chat/getBase64FromMediaMessage achar a mensagem. Essa rota
+      # procura a mensagem numa tabela própria da Evolution (repository.
+      # message, no código-fonte dela) antes de devolver a mídia — com esta
+      # linha em 'false', a busca sempre vinha vazia e a rota respondia
+      # "Message not found" para TODO áudio, imagem ou documento recebido.
+      # É o preço de a transcrição funcionar: a mensagem fica duplicada no
+      # schema `evolution` por um tempo, além de estar em `mensagens`, na
+      # nossa aplicação. Sem duplicar aqui, não tem como decodificar mídia
+      # de forma assíncrona — o WhatsApp cifra o arquivo, e só quem acabou
+      # de recebê-lo (a Evolution) consegue decifrar.
+      DATABASE_SAVE_DATA_NEW_MESSAGE: 'true'
       DATABASE_SAVE_MESSAGE_UPDATE: 'false'
       DATABASE_SAVE_DATA_CONTACTS: 'false'
       DATABASE_SAVE_DATA_CHATS: 'false'
