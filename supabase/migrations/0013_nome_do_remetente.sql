@@ -22,6 +22,15 @@ alter table versoes_agente_ia add column if not exists nome_exibicao text;
 -- registrar_mensagem_ia ganha o nome de exibição como parâmetro, com
 -- default null: chamada antiga (sem o parâmetro) continua funcionando,
 -- só sem o prefixo no envio.
+--
+-- O drop abaixo é necessário: `create or replace` só substitui a função
+-- quando a lista de parâmetros bate exatamente. Mudando a assinatura, ele
+-- cria uma SEGUNDA função de mesmo nome em vez de trocar a primeira — as
+-- duas convivem no catálogo, e qualquer chamada posicional com só 4
+-- argumentos (a app usa nomeados e não sofre com isso, mas SQL direto,
+-- migração e teste, sim) vira "function ... is not unique".
+drop function if exists registrar_mensagem_ia(uuid, text, text, jsonb);
+
 create or replace function registrar_mensagem_ia(
   p_conversa_id uuid,
   p_conteudo text,

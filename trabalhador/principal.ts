@@ -57,6 +57,13 @@ const INTERVALO_VARREDURA_MS = ambienteServidor.varreduraRapidaSegundos * 1000;
 // de WhatsApp, só somava atraso sem evitar corrida nenhuma.
 const IDADE_MINIMA_EVENTO_MS = 3_000;
 
+// Mesmo raciocínio do IDADE_MINIMA_EVENTO_MS, e mesmo esquecimento: ficou
+// em 120_000 quando o resto da varredura foi acelerado. Mensagem enviada
+// pelo atendente na tela (Server Action da Vercel, sempre em modo BANCO)
+// dependia só desta varredura — com dois minutos de buffer, "enviei e não
+// saiu" era literalmente esperar dois minutos, não estar quebrado.
+const IDADE_MINIMA_MENSAGEM_MS = 3_000;
+
 const trabalhadores: Worker[] = [];
 let encerrando = false;
 
@@ -167,7 +174,7 @@ async function varrerMensagensPendentes(): Promise<void> {
     .select('id, organizacao_id')
     .eq('direcao', 'SAIDA')
     .in('status', ['PENDENTE', 'ENFILEIRADA'])
-    .lt('criado_em', new Date(Date.now() - 120_000).toISOString())
+    .lt('criado_em', new Date(Date.now() - IDADE_MINIMA_MENSAGEM_MS).toISOString())
     .order('criado_em', { ascending: true })
     .limit(100);
 
