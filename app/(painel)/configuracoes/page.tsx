@@ -21,14 +21,14 @@ export default async function PaginaOrganizacao() {
   const situacao = [
     { nome: 'Banco de dados (Supabase)', pronto: true, detalhe: 'Conectado — você está lendo dados dele.' },
     {
-      nome: 'Fila de processamento (Redis)',
-      pronto: modoFila() === 'REDIS',
+      nome: 'Fila de processamento',
+      pronto: modoFila() !== 'MEMORIA',
       detalhe:
         modoFila() === 'REDIS'
-          ? 'Conectada.'
+          ? 'Conectada diretamente ao Redis.'
           : modoFila() === 'MEMORIA'
-            ? 'Rodando em memória — só vale para desenvolvimento. Em produção, configure REDIS_URL.'
-            : 'Não configurada. Sem ela, mensagens recebidas não são processadas.',
+            ? 'Rodando em memória — só vale para desenvolvimento.'
+            : 'A cargo do worker, no servidor à parte: a aplicação grava o trabalho no banco e ele o busca em poucos segundos. Se as mensagens pararem de ser respondidas, confira se o worker está ligado.',
     },
     {
       nome: 'WhatsApp (Evolution API)',

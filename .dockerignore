@@ -1,0 +1,10 @@
+# O que NÃO entra no contexto de build da imagem do worker.
+# Segredo fora sempre: a imagem não precisa deles, eles chegam por variável.
+.env
+.env*.local
+.git
+node_modules
+.next
+coverage
+*.log
+supabase/esquema-completo.sql

@@ -25,6 +25,12 @@ import { FILAS, type TrabalhoCampanha } from '@/lib/filas/nomes';
 import { log } from '@/lib/log';
 import type { Campanha, Contato } from '@/lib/tipos-banco';
 
+/**
+ * Quanto tempo um passo segura a campanha enquanto trabalha. Se o worker
+ * cair no meio, a varredura lenta assume depois disso.
+ */
+const PRAZO_PASSO_SEGUNDOS = 300;
+
 export async function processarCampanha(trabalho: TrabalhoCampanha): Promise<void> {
   const supabase = clienteAdministrador();
   const registro = log.comContexto({
@@ -49,6 +55,40 @@ export async function processarCampanha(trabalho: TrabalhoCampanha): Promise<voi
     registro.info('Campanha não está em execução; ciclo encerrado', { status: campanha.status });
     return;
   }
+
+  // Uma campanha tem UMA sequência de envios. Sem esta reivindicação,
+  // qualquer trabalho a mais — a varredura de recuperação, um clique duplo
+  // em "Retomar" — abriria outra sequência em paralelo, e a campanha
+  // mandaria no dobro do ritmo configurado: o padrão de disparo que faz o
+  // WhatsApp banir o número.
+  const { data: podeSeguir, error: erroPasso } = await supabase.rpc('reivindicar_passo_campanha', {
+    p_campanha_id: campanha.id,
+    p_prazo_segundos: PRAZO_PASSO_SEGUNDOS,
+  });
+
+  if (erroPasso) throw new Error(`Falha ao reivindicar o passo da campanha: ${erroPasso.message}`);
+
+  if (!podeSeguir) {
+    registro.info('Outra sequência já conduz esta campanha; esta encerra aqui');
+    return;
+  }
+
+  try {
+    await darPasso(campanha, trabalho, registro);
+  } catch (erro) {
+    // Devolve a vez: sem isto, a nova tentativa da fila encontraria a
+    // campanha ainda reservada por este passo e desistiria.
+    await supabase.rpc('agendar_passo_campanha', { p_campanha_id: campanha.id, p_atraso_ms: 0 });
+    throw erro;
+  }
+}
+
+async function darPasso(
+  campanha: Campanha,
+  trabalho: TrabalhoCampanha,
+  registro: ReturnType<typeof log.comContexto>,
+): Promise<void> {
+  const supabase = clienteAdministrador();
 
   const { data: organizacao } = await supabase
     .from('organizacoes')
@@ -330,6 +370,16 @@ async function contarEnviosDeHoje(trabalho: TrabalhoCampanha, fuso: string): Pro
 }
 
 async function reagendar(trabalho: TrabalhoCampanha, atrasoMs: number): Promise<void> {
+  // Primeiro o banco fica sabendo quando é a vez do próximo passo, no
+  // relógio dele. Trabalho desta campanha que aparecer antes disso perde a
+  // reivindicação e encerra — é o que mantém uma sequência só.
+  const { error } = await clienteAdministrador().rpc('agendar_passo_campanha', {
+    p_campanha_id: trabalho.campanhaId,
+    p_atraso_ms: Math.round(atrasoMs),
+  });
+
+  if (error) throw new Error(`Falha ao agendar o próximo passo da campanha: ${error.message}`);
+
   await enfileirar(FILAS.campanhas, trabalho, {
     id: `campanha:${trabalho.campanhaId}:${Date.now()}`,
     atrasoMs,

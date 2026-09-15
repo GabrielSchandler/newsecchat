@@ -309,6 +309,8 @@ export type Mensagem = {
   metadados: Json;
   criado_em: string;
   enviado_em: string | null;
+  /** Reserva do despacho em andamento. Vencida ou nula = livre para sair. */
+  despacho_reservado_ate: string | null;
 };
 
 export type EtiquetaConversa = {
@@ -467,6 +469,8 @@ export type Campanha = {
   departamento_id: string | null;
   status: StatusCampanha;
   agendada_para: string | null;
+  /** Quando é a vez do próximo passo, no relógio do banco. Nulo = pode seguir já. */
+  proximo_passo_em: string | null;
   iniciada_em: string | null;
   concluida_em: string | null;
   total: number;
@@ -720,6 +724,18 @@ export type BancoDados = {
       };
       proxima_versao_agente: { Args: { p_agente_id: string }; Returns: number };
       reservar_contato_campanha: { Args: { p_campanha_id: string }; Returns: string | null };
+      reservar_despacho_mensagem: {
+        Args: { p_mensagem_id: string; p_organizacao_id: string; p_segundos?: number };
+        Returns: Mensagem[];
+      };
+      reivindicar_passo_campanha: {
+        Args: { p_campanha_id: string; p_prazo_segundos?: number; p_tolerancia_segundos?: number };
+        Returns: boolean;
+      };
+      agendar_passo_campanha: {
+        Args: { p_campanha_id: string; p_atraso_ms: number };
+        Returns: undefined;
+      };
       concluir_contato_campanha: {
         Args: {
           p_contato_campanha_id: string;

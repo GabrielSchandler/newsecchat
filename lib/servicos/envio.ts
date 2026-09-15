@@ -7,9 +7,9 @@
  *   2. ENFILEIRAR o despacho.
  *
  * Se o processo cair entre uma e outra, a mensagem fica registrada como
- * pendente e é recuperada pela varredura — nada some. Se a fila entregar
- * o mesmo trabalho duas vezes, a segunda encontra a mensagem já ENVIADA e
- * não manda de novo. O cliente nunca recebe a mesma frase duplicada por
+ * pendente e é recuperada pela varredura — nada some. Se dois trabalhos
+ * chegarem para a mesma mensagem, só um consegue reservá-la no banco; o
+ * outro sai sem mandar nada. O cliente nunca recebe a mesma frase duplicada por
  * falha de infraestrutura.
  */
 import type { SupabaseClient } from '@supabase/supabase-js';
@@ -120,10 +120,22 @@ export interface ResultadoDespacho {
 }
 
 /**
+ * Por quanto tempo a mensagem fica reservada para um despacho. Folga
+ * larga sobre o tempo limite da chamada à Evolution (20 s): se o worker
+ * cair no meio do envio, a reserva vence sozinha e a mensagem volta a
+ * poder sair.
+ */
+const PRAZO_RESERVA_SEGUNDOS = 120;
+
+/**
  * Entrega de fato ao provedor. Roda no worker.
  *
- * Só age sobre mensagem PENDENTE ou ENFILEIRADA: uma segunda entrega do
- * mesmo trabalho encontra ENVIADA e sai sem fazer nada.
+ * Antes de chamar o provedor, a mensagem é RESERVADA no banco por um
+ * UPDATE condicional. Dois trabalhos para a mesma mensagem — o normal e o
+ * da varredura de recuperação, por exemplo — não reservam juntos: um
+ * envia, o outro sai sem fazer nada. Só conferir o status e depois enviar
+ * deixaria os dois lerem PENDENTE ao mesmo tempo, e o cliente receberia a
+ * mesma frase duas vezes.
  */
 export async function despacharMensagem(
   cliente: Cliente,
@@ -132,21 +144,18 @@ export async function despacharMensagem(
 ): Promise<ResultadoDespacho> {
   const registro = log.comContexto({ organizacao_id: organizacaoId, mensagem_id: mensagemId });
 
-  const { data: mensagem, error } = await cliente
-    .from('mensagens')
-    .select('*')
-    .eq('id', mensagemId)
-    .eq('organizacao_id', organizacaoId)
-    .maybeSingle();
+  const { data: reservadas, error } = await cliente.rpc('reservar_despacho_mensagem', {
+    p_mensagem_id: mensagemId,
+    p_organizacao_id: organizacaoId,
+    p_segundos: PRAZO_RESERVA_SEGUNDOS,
+  });
 
-  if (error) throw new Error(`Falha ao ler mensagem: ${error.message}`);
-  if (!mensagem) return { status: 'IGNORADA', motivo: 'Mensagem não encontrada' };
+  if (error) throw new Error(`Falha ao reservar a mensagem para despacho: ${error.message}`);
 
-  if (mensagem.status !== 'PENDENTE' && mensagem.status !== 'ENFILEIRADA') {
-    registro.info('Despacho ignorado: mensagem já não está pendente', {
-      status: mensagem.status,
-    });
-    return { status: 'IGNORADA', motivo: `Mensagem já está ${mensagem.status}` };
+  const mensagem = reservadas?.[0];
+
+  if (!mensagem) {
+    return explicarDespachoIgnorado(cliente, mensagemId, organizacaoId, registro);
   }
 
   const { data: canal } = await cliente
@@ -202,6 +211,7 @@ export async function despacharMensagem(
         identificador_externo: resposta.identificadorExterno,
         enviado_em: resposta.enviadoEm,
         erro: null,
+        despacho_reservado_ate: null,
       })
       .eq('id', mensagem.id)
       .eq('organizacao_id', organizacaoId);
@@ -218,10 +228,11 @@ export async function despacharMensagem(
       return { status: 'FALHOU', motivo: descricao };
     }
 
-    // Erro temporário: deixa PENDENTE e deixa a fila tentar de novo.
+    // Erro temporário: devolve a reserva, deixa PENDENTE e deixa a fila
+    // tentar de novo.
     await cliente
       .from('mensagens')
-      .update({ erro: descricao })
+      .update({ erro: descricao, despacho_reservado_ate: null })
       .eq('id', mensagem.id)
       .eq('organizacao_id', organizacaoId);
 
@@ -229,10 +240,35 @@ export async function despacharMensagem(
   }
 }
 
+/** Quando a reserva não vem, diz por quê — no log e no resultado. */
+async function explicarDespachoIgnorado(
+  cliente: Cliente,
+  mensagemId: string,
+  organizacaoId: string,
+  registro: ReturnType<typeof log.comContexto>,
+): Promise<ResultadoDespacho> {
+  const { data: atual } = await cliente
+    .from('mensagens')
+    .select('status')
+    .eq('id', mensagemId)
+    .eq('organizacao_id', organizacaoId)
+    .maybeSingle();
+
+  if (!atual) return { status: 'IGNORADA', motivo: 'Mensagem não encontrada' };
+
+  const motivo =
+    atual.status === 'PENDENTE' || atual.status === 'ENFILEIRADA'
+      ? 'Outro trabalho está despachando esta mensagem agora'
+      : `Mensagem já está ${atual.status}`;
+
+  registro.info('Despacho ignorado', { motivo });
+  return { status: 'IGNORADA', motivo };
+}
+
 async function marcarFalha(cliente: Cliente, mensagem: Mensagem, motivo: string): Promise<void> {
   await cliente
     .from('mensagens')
-    .update({ status: 'FALHOU', erro: motivo })
+    .update({ status: 'FALHOU', erro: motivo, despacho_reservado_ate: null })
     .eq('id', mensagem.id)
     .eq('organizacao_id', mensagem.organizacao_id);
 }

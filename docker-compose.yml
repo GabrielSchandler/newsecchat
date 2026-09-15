@@ -6,8 +6,13 @@
 #
 # COMO USAR:
 #   1. Copie .env.example para .env.local e preencha
-#   2. docker compose up -d
+#   2. docker compose --env-file .env.local up -d --build
 #   3. docker compose logs -f trabalhador
+#
+# O `--env-file .env.local` é obrigatório: o Docker Compose só lê sozinho
+# um arquivo chamado `.env`. Sem a opção, os containers sobem com todas as
+# variáveis vazias — a Evolution não acha o banco e o worker não acha o
+# Supabase, com erros que não apontam para a causa.
 #
 # A aplicação web (Next.js) NÃO está aqui: ela roda na Vercel, ou local
 # com `npm run dev`. O que está aqui precisa de um servidor ligado o
@@ -44,7 +49,7 @@ services:
   # o dono não precisa administrar mais nada.
   # -------------------------------------------------------------------
   evolution:
-    image: atendai/evolution-api:v2.1.1
+    image: evoapicloud/evolution-api:v2.3.7
     container_name: newsecchat-evolution
     restart: unless-stopped
     depends_on:
@@ -115,6 +120,8 @@ services:
       NEXT_PUBLIC_SUPABASE_ANON_KEY: ${NEXT_PUBLIC_SUPABASE_ANON_KEY}
       SUPABASE_SERVICE_ROLE_KEY: ${SUPABASE_SERVICE_ROLE_KEY}
       NEXT_PUBLIC_URL_APLICACAO: ${NEXT_PUBLIC_URL_APLICACAO}
+      # Redis de dentro desta máquina. A Vercel não fala com ele: grava o
+      # trabalho no banco, e a varredura rápida deste worker o busca.
       REDIS_URL: redis://redis:6379
       EVOLUTION_API_URL: http://evolution:8080
       EVOLUTION_API_KEY: ${EVOLUTION_API_KEY}
@@ -127,7 +134,48 @@ services:
       GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET}
       GOOGLE_REDIRECT_URI: ${GOOGLE_REDIRECT_URI}
       NIVEL_LOG: ${NIVEL_LOG:-info}
+      # De quantos em quantos segundos o worker procura trabalho novo no
+      # banco. É o atraso máximo entre a mensagem chegar e a IA começar.
+      VARREDURA_RAPIDA_SEGUNDOS: ${VARREDURA_RAPIDA_SEGUNDOS:-3}
+
+  # -------------------------------------------------------------------
+  # Caddy — põe a Evolution na internet com HTTPS.
+  #
+  # Por que existe: a aplicação na Vercel chama a Evolution para criar
+  # canal e gerar o QR Code. A porta 8080 fica publicada só em
+  # 127.0.0.1, então de fora ninguém a alcança — e expor 8080 aberta
+  # seria pior: quem controla a Evolution manda mensagem em nome do
+  # número. O Caddy resolve os dois lados: fecha a porta e publica um
+  # endereço com certificado, atrás da chave da Evolution.
+  #
+  # O certificado é emitido e renovado sozinho pela Let's Encrypt. Para
+  # isso o domínio de EVOLUTION_API_URL precisa estar apontando para o
+  # IP desta máquina ANTES de subir, e as portas 80 e 443 abertas.
+  # -------------------------------------------------------------------
+  caddy:
+    image: caddy:2-alpine
+    container_name: newsecchat-caddy
+    restart: unless-stopped
+    depends_on:
+      - evolution
+    ports:
+      - '80:80'
+      - '443:443'
+    environment:
+      # O Caddyfile usa este valor como endereço do site. Precisa ser
+      # `https://dominio`, sem barra no final — é o mesmo valor que a
+      # Evolution recebe em SERVER_URL e que vai na Vercel.
+      EVOLUTION_API_URL: ${EVOLUTION_API_URL}
+    volumes:
+      - ./infra/Caddyfile:/etc/caddy/Caddyfile:ro
+      # Os certificados vivem aqui. Sem volume, cada recriação do
+      # container pediria certificado novo e bateria no limite semanal
+      # da Let's Encrypt.
+      - dados-caddy:/data
+      - config-caddy:/config
 
 volumes:
   dados-redis:
   instancias-evolution:
+  dados-caddy:
+  config-caddy:

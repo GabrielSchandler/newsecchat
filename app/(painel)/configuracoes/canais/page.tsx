@@ -2,7 +2,6 @@ import type { Metadata } from 'next';
 import { exigirPapel } from '@/lib/sessao';
 import { clienteServidor } from '@/lib/supabase/servidor';
 import { integracaoConfigurada, orientacaoIntegracao, ambientePublico } from '@/lib/ambiente';
-import { modoFila } from '@/lib/filas/produtor';
 import { AvisoConfiguracao } from '@/componentes/ui/estrutura';
 import { PainelCanais } from './painel';
 
@@ -30,7 +29,6 @@ export default async function PaginaCanais() {
   ]);
 
   const evolutionPronta = integracaoConfigurada('EVOLUTION');
-  const fila = modoFila();
 
   return (
     <div className="space-y-4">
@@ -38,13 +36,6 @@ export default async function PaginaCanais() {
         <AvisoConfiguracao
           titulo="Evolution API ainda não configurada"
           orientacao={orientacaoIntegracao.EVOLUTION}
-        />
-      ) : null}
-
-      {fila === 'INDISPONIVEL' ? (
-        <AvisoConfiguracao
-          titulo="Nenhuma fila configurada"
-          orientacao="Sem Redis, as mensagens recebidas ficam gravadas mas não são processadas — a IA não responde e o envio não sai. Preencha REDIS_URL no .env.local (ver OWNER_SETUP_GUIDE.md, seção REDIS)."
         />
       ) : null}
 

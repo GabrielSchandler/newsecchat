@@ -190,11 +190,27 @@ export async function sincronizarAgora(planilhaId: string): Promise<Resultado> {
   if (!planilha) return { ok: false, erro: 'Planilha não encontrada.' };
 
   try {
-    await enfileirar(
+    const resultado = await enfileirar(
       FILAS.sincronizacaoPlanilhas,
       { integracaoSheetsId: planilhaId, organizacaoId: sessao.organizacao.id },
       { id: `planilha:${planilhaId}:manual:${Date.now()}` },
     );
+
+    if (resultado === 'DELEGADO') {
+      // Sem fila neste processo: zerar a data da última sincronização faz a
+      // varredura do worker tratar a planilha como vencida na próxima volta.
+      await supabase
+        .from('integracoes_google_sheets')
+        .update({ ultima_sincronizacao_em: null })
+        .eq('id', planilhaId)
+        .eq('organizacao_id', sessao.organizacao.id);
+
+      revalidatePath('/integracoes/google-sheets');
+      return {
+        ok: true,
+        aviso: 'Sincronização agendada. Os contatos aparecem em até um minuto — atualize a página.',
+      };
+    }
   } catch (erro) {
     return {
       ok: false,

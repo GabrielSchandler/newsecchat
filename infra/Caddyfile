@@ -1,0 +1,33 @@
+# Publica a Evolution API com HTTPS.
+#
+# O endereço do site vem de EVOLUTION_API_URL (ex.: https://evo.exemplo.com.br).
+# O Caddy pede o certificado à Let's Encrypt na primeira subida e renova sozinho.
+#
+# `reverse_proxy evolution:8080` fala com o container pela rede interna do
+# compose: a porta da Evolution continua fechada para a internet.
+{$EVOLUTION_API_URL} {
+	encode zstd gzip
+
+	log {
+		output stdout
+		format console
+	}
+
+	# A Evolution traz uma tela de administração em /manager, que entra com a
+	# chave global, e uma página de boas-vindas na raiz que informa a versão.
+	# Nenhuma das duas é usada pela aplicação, e exposta é só superfície de
+	# ataque: minutos depois de este endereço subir já havia varredor batendo
+	# nele. Quem precisa da API continua entrando pelos caminhos de baixo,
+	# sempre com a chave.
+	handle /manager* {
+		respond 404
+	}
+
+	handle / {
+		respond 404
+	}
+
+	handle {
+		reverse_proxy evolution:8080
+	}
+}

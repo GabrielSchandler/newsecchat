@@ -143,6 +143,11 @@ export function PainelConversa({
       respondendo_id: null,
       campanha_id: null,
       metadados: {},
+      // Reserva do despacho: mensagem recém-criada não tem nenhuma — o
+      // worker é quem grava isso quando pega o envio (ver 0012_reservas_de_
+      // despacho_e_de_campanha.sql), o que nunca acontece com um balão
+      // otimista que só existe no navegador.
+      despacho_reservado_ate: null,
       criado_em: new Date().toISOString(),
       enviado_em: null,
     };

@@ -4,7 +4,7 @@ import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
 import { clienteServidor } from '@/lib/supabase/servidor';
 import { exigirPapel } from '@/lib/sessao';
-import { enfileirar, FILAS, modoFila } from '@/lib/filas/produtor';
+import { enfileirar, FILAS } from '@/lib/filas/produtor';
 import { registrarAuditoria, ACOES } from '@/lib/auditoria';
 import { normalizarTelefone, variantesBrasil } from '@/lib/nucleo/telefone';
 import { aplicarModelo, variaveisDoModelo } from '@/lib/nucleo/modelos';
@@ -342,13 +342,6 @@ export async function mudarSituacaoCampanha(
   if (!campanha) return { ok: false, erro: 'Campanha não encontrada.' };
 
   if (acao === 'INICIAR' || acao === 'RETOMAR') {
-    if (modoFila() === 'INDISPONIVEL') {
-      return {
-        ok: false,
-        erro: 'A campanha precisa da fila para rodar. Configure REDIS_URL — ver OWNER_SETUP_GUIDE.md, seção REDIS.',
-      };
-    }
-
     const { data: canal } = await supabase
       .from('canais')
       .select('status, ativo, nome')
@@ -386,19 +379,24 @@ export async function mudarSituacaoCampanha(
       status: novoStatus,
       iniciada_em: acao === 'INICIAR' ? new Date().toISOString() : campanha.iniciada_em,
       concluida_em: acao === 'CANCELAR' ? new Date().toISOString() : campanha.concluida_em,
+      // Começar ou retomar zera a vez: o primeiro passo segue na hora.
+      ...(novoStatus === 'EM_EXECUCAO' ? { proximo_passo_em: null } : {}),
     })
     .eq('id', campanhaId)
     .eq('organizacao_id', sessao.organizacao.id);
 
   if (error) return { ok: false, erro: 'Não foi possível alterar a campanha.' };
 
+  let delegada = false;
+
   if (novoStatus === 'EM_EXECUCAO') {
     try {
-      await enfileirar(
+      const resultado = await enfileirar(
         FILAS.campanhas,
         { campanhaId, organizacaoId: sessao.organizacao.id },
         { id: `campanha:${campanhaId}:${Date.now()}` },
       );
+      delegada = resultado === 'DELEGADO';
     } catch (erro) {
       await supabase.from('campanhas').update({ status: 'PAUSADA' }).eq('id', campanhaId);
       return {
@@ -432,6 +430,10 @@ export async function mudarSituacaoCampanha(
   // antes de cada envio e para sozinho. Vale dizer isso ao usuário.
   if (acao === 'PAUSAR') {
     return { ok: true, aviso: 'Campanha pausada. O envio em andamento termina e nenhum novo começa.' };
+  }
+
+  if (delegada) {
+    return { ok: true, aviso: 'Campanha em execução. O primeiro envio sai em alguns segundos.' };
   }
 
   return { ok: true };
