@@ -148,6 +148,10 @@ export function PainelConversa({
       // despacho_e_de_campanha.sql), o que nunca acontece com um balão
       // otimista que só existe no navegador.
       despacho_reservado_ate: null,
+      // Balão otimista, local: o servidor é quem grava o nome de verdade
+      // (`enviarMensagemManual`, com o nome de quem está logado). Este
+      // objeto some assim que a linha real chega pelo Realtime.
+      remetente_nome: null,
       criado_em: new Date().toISOString(),
       enviado_em: null,
     };

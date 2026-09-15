@@ -67,6 +67,7 @@ export function EditorAgente({
   const base = rascunho ?? publicada;
 
   const [persona, definirPersona] = React.useState(base?.persona ?? '');
+  const [nomeExibicao, definirNomeExibicao] = React.useState(base?.nome_exibicao ?? '');
   const [tom, definirTom] = React.useState(base?.tom ?? '');
   const [descricaoEmpresa, definirDescricao] = React.useState(base?.descricao_empresa ?? '');
   const [servicos, definirServicos] = React.useState(base?.servicos ?? '');
@@ -127,6 +128,7 @@ export function EditorAgente({
         agenteId: agente.id,
         conteudo: {
           persona,
+          nomeExibicao: nomeExibicao.trim() || null,
           tom,
           descricaoEmpresa,
           servicos,
@@ -239,6 +241,21 @@ export function EditorAgente({
               rows={2}
               disabled={!podeEditar}
               placeholder="Atendente do primeiro contato. Apresenta-se pelo nome da empresa."
+            />
+          </Campo>
+
+          <Campo
+            rotulo="Nome de exibição"
+            htmlFor="ia-nome-exibicao"
+            ajuda="Abre cada mensagem no WhatsApp, em negrito — ex.: Ana. Diferente do 'Nome do agente' lá embaixo, que é só o rótulo desta configuração aqui na tela; este é o nome que o cliente vê. Em branco, a mensagem sai sem nome na frente."
+          >
+            <Entrada
+              id="ia-nome-exibicao"
+              value={nomeExibicao}
+              onChange={(evento) => definirNomeExibicao(evento.target.value)}
+              disabled={!podeEditar}
+              maxLength={60}
+              placeholder="Ana"
             />
           </Campo>
 

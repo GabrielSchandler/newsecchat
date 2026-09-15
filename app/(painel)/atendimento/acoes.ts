@@ -299,6 +299,7 @@ export async function enviarMensagemManual(entrada: {
       autorMembroId: sessao.membro.id,
       conteudo: conferido.data.texto,
       chaveIdempotencia: chaveEnvioManual(conversa.id, sessao.membro.id, conferido.data.texto),
+      remetenteNome: sessao.perfil.nome || sessao.perfil.email,
     });
 
     if (!resultado.mensagemId) {

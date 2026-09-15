@@ -311,6 +311,12 @@ export type Mensagem = {
   enviado_em: string | null;
   /** Reserva do despacho em andamento. Vencida ou nula = livre para sair. */
   despacho_reservado_ate: string | null;
+  /**
+   * Nome de quem assina a mensagem no WhatsApp (a IA ou o atendente que
+   * respondeu), gravado no momento do envio. Nulo em mensagem de sistema
+   * ou de campanha — essas saem sem prefixo de nome.
+   */
+  remetente_nome: string | null;
 };
 
 export type EtiquetaConversa = {
@@ -372,6 +378,12 @@ export type VersaoAgenteIa = {
   status: StatusVersaoIa;
   origem: OrigemVersaoIa;
   persona: string;
+  /**
+   * Nome que a IA usa para se apresentar ao cliente (ex.: "Ana") — abre
+   * cada mensagem dela no WhatsApp. Diferente de `agentes_ia.nome`, que é
+   * só o rótulo interno do agente na tela de configuração.
+   */
+  nome_exibicao: string | null;
   tom: string;
   descricao_empresa: string;
   servicos: string;
@@ -696,6 +708,7 @@ export type BancoDados = {
           p_conteudo: string;
           p_chave_idempotencia: string;
           p_metadados?: Json;
+          p_remetente_nome?: string | null;
         };
         Returns: string | null;
       };

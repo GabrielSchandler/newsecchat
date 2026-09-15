@@ -36,6 +36,12 @@ export interface PedidoMensagemSaida {
   chaveIdempotencia: string;
   campanhaId?: string | null;
   metadados?: Record<string, unknown>;
+  /**
+   * Nome de quem assina a mensagem no WhatsApp — o nome de exibição da IA
+   * ou o nome do atendente que respondeu. Sem isso, a mensagem sai sem
+   * prefixo de nome (é o caso de campanha e de mensagem de sistema).
+   */
+  remetenteNome?: string | null;
 }
 
 export interface ResultadoCriacaoSaida {
@@ -65,6 +71,7 @@ export async function criarMensagemSaida(
       campanha_id: pedido.campanhaId ?? null,
       status: 'PENDENTE',
       metadados: (pedido.metadados ?? {}) as never,
+      remetente_nome: pedido.remetenteNome ?? null,
     })
     .select('id')
     .single();
@@ -197,7 +204,11 @@ export async function despacharMensagem(
 
     const resposta =
       mensagem.tipo === 'TEXTO' || !mensagem.arquivo_id
-        ? await provedor.enviarTexto(canalEnvio, contato.telefone, mensagem.conteudo ?? '')
+        ? await provedor.enviarTexto(
+            canalEnvio,
+            contato.telefone,
+            formatarParaEnvio(mensagem.remetente_nome, mensagem.conteudo ?? ''),
+          )
         : await provedor.enviarMidia(
             canalEnvio,
             contato.telefone,
@@ -302,8 +313,36 @@ async function montarMidia(
     base64: conteudo.toString('base64'),
     nomeArquivo: arquivo.nome_arquivo ?? 'arquivo',
     tipoMime: arquivo.tipo_mime ?? 'application/octet-stream',
-    legenda: mensagem.conteudo ?? undefined,
+    // Só assina a legenda quando existe legenda: mídia sem legenda
+    // continua sem legenda, em vez de ganhar uma só para caber o nome.
+    legenda: mensagem.conteudo
+      ? formatarParaEnvio(mensagem.remetente_nome, mensagem.conteudo)
+      : undefined,
   };
+}
+
+/**
+ * Prefixa o texto com o nome de quem está falando, em negrito no padrão
+ * do WhatsApp — um asterisco de cada lado ("*Ana*"). Dois asteriscos
+ * (padrão Markdown) aparecem literalmente na tela do cliente, sem
+ * formatar nada: o WhatsApp usa sintaxe própria, não Markdown.
+ *
+ * Aplicado aqui, na hora do envio — nunca pedido à IA no prompt — para
+ * ficar consistente sempre, sem depender do modelo lembrar de formatar
+ * certo em toda resposta. `mensagem.conteudo` (o que fica gravado e o
+ * que a IA lê no histórico) permanece sem o prefixo; só o texto que sai
+ * para o WhatsApp ganha o "*Nome*\n\n" na frente.
+ *
+ * Sem remetente (mensagem de sistema ou de campanha), o texto sai como
+ * foi escrito, sem prefixo nem mudança de caixa.
+ */
+function formatarParaEnvio(remetenteNome: string | null | undefined, conteudo: string): string {
+  if (!conteudo) return conteudo;
+
+  const comMaiuscula = conteudo.charAt(0).toUpperCase() + conteudo.slice(1);
+  if (!remetenteNome) return comMaiuscula;
+
+  return `*${remetenteNome}*\n\n${comMaiuscula}`;
 }
 
 /** Canal pronto para enviar? Usado pela interface antes de oferecer a ação. */

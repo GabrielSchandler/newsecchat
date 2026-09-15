@@ -21,6 +21,7 @@ const uuid = z.string().uuid();
 
 const esquemaConteudo = z.object({
   persona: z.string().max(2000),
+  nomeExibicao: z.string().trim().max(60).nullable(),
   tom: z.string().max(1000),
   descricaoEmpresa: z.string().max(4000),
   servicos: z.string().max(4000),
@@ -41,6 +42,7 @@ type ConteudoVersao = z.infer<typeof esquemaConteudo>;
 function paraColunas(conteudo: ConteudoVersao) {
   return {
     persona: conteudo.persona,
+    nome_exibicao: conteudo.nomeExibicao,
     tom: conteudo.tom,
     descricao_empresa: conteudo.descricaoEmpresa,
     servicos: conteudo.servicos,
@@ -229,6 +231,7 @@ export async function restaurarVersao(versaoId: string): Promise<Resultado> {
   // passa pela mesma revisão que qualquer outra mudança.
   const conteudo: ConteudoVersao = {
     persona: origem.persona,
+    nomeExibicao: origem.nome_exibicao,
     tom: origem.tom,
     descricaoEmpresa: origem.descricao_empresa,
     servicos: origem.servicos,
@@ -564,6 +567,9 @@ function montarConteudo(
 
   return {
     persona: ler('persona', ''),
+    // Não é campo de sugestão (ver CAMPOS_PERMITIDOS acima): vem sempre
+    // da versão base, nunca de uma sobrescrita de análise.
+    nomeExibicao: base.nome_exibicao,
     tom: ler('tom', ''),
     descricaoEmpresa: ler('descricao_empresa', ''),
     servicos: ler('servicos', ''),

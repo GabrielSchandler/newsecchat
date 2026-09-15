@@ -204,6 +204,7 @@ export async function executarTurnoIa(
         versao_id: versao.id,
         confianca: decisao.confianca,
       } as unknown as Json,
+      p_remetente_nome: versao.nome_exibicao ?? null,
     });
 
     if (erroRpc) throw new Error(`Falha ao registrar resposta da IA: ${erroRpc.message}`);

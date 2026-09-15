@@ -146,6 +146,7 @@ export function ListaVersoes({
               <div className="space-y-3">
                 {[
                   ['Persona', vendo.persona],
+                  ['Nome de exibição', vendo.nome_exibicao ?? '(sem nome — mensagem sai sem prefixo)'],
                   ['Tom', vendo.tom],
                   ['A empresa', vendo.descricao_empresa],
                   ['Serviços', vendo.servicos],
