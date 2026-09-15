@@ -12,8 +12,10 @@ import {
   Clock,
   Hand,
   Lock,
+  Mic,
   RotateCcw,
   Send,
+  Square,
   StickyNote,
   XCircle,
 } from 'lucide-react';
@@ -36,6 +38,7 @@ import {
   assumirConversa,
   devolverParaIa,
   encerrarConversa,
+  enviarAudioManual,
   enviarMensagemManual,
   marcarComoLida,
   obterUrlMidia,
@@ -359,10 +362,18 @@ export function PainelConversa({
                 maxLength={4000}
                 className="min-h-[44px] resize-none"
               />
-              <Botao type="submit" carregando={enviando} disabled={!texto.trim()} className="h-[44px]">
-                <Send className="h-4 w-4" aria-hidden />
-                Enviar
-              </Botao>
+              {texto.trim() ? (
+                <Botao type="submit" carregando={enviando} className="h-[44px]">
+                  <Send className="h-4 w-4" aria-hidden />
+                  Enviar
+                </Botao>
+              ) : (
+                <GravadorAudio
+                  conversaId={conversa.id}
+                  desabilitado={ocupado}
+                  aoEnviar={(formData) => executar(() => enviarAudioManual(formData))}
+                />
+              )}
             </div>
 
             {detalhe.canal && (!detalhe.canal.ativo || detalhe.canal.status !== 'CONECTADO') ? (
@@ -522,6 +533,141 @@ function PlayerAudio({ arquivoId }: { arquivoId: string }) {
   return (
     // eslint-disable-next-line jsx-a11y/media-has-caption -- é áudio de conversa, não vídeo com fala gravada; a transcrição já aparece logo abaixo.
     <audio controls preload="none" src={url} className="mb-1 h-9 w-full max-w-[260px]" />
+  );
+}
+
+/**
+ * Gravador de nota de voz. Grava no formato que o navegador entrega (webm
+ * na maioria; a conversão para o ogg/opus que o WhatsApp exige acontece
+ * depois, no worker — ver `transcodificarParaNotaDeVoz` em
+ * lib/servicos/envio.ts). Some o botão de gravar e aparece o de enviar
+ * assim que há texto digitado, e vice-versa — como no WhatsApp.
+ */
+function GravadorAudio({
+  conversaId,
+  desabilitado,
+  aoEnviar,
+}: {
+  conversaId: string;
+  desabilitado: boolean;
+  aoEnviar: (formData: FormData) => Promise<boolean>;
+}) {
+  const [gravando, definirGravando] = React.useState(false);
+  const [enviando, definirEnviando] = React.useState(false);
+  const [segundos, definirSegundos] = React.useState(0);
+
+  const gravadorRef = React.useRef<MediaRecorder | null>(null);
+  const pedacosRef = React.useRef<Blob[]>([]);
+  const streamRef = React.useRef<MediaStream | null>(null);
+  const intervaloRef = React.useRef<ReturnType<typeof setInterval> | null>(null);
+
+  function encerrarCaptura() {
+    streamRef.current?.getTracks().forEach((trilha) => trilha.stop());
+    streamRef.current = null;
+    if (intervaloRef.current) clearInterval(intervaloRef.current);
+    intervaloRef.current = null;
+  }
+
+  // Some ao trocar de conversa com a gravação em andamento — sem isso o
+  // microfone continuaria ligado numa conversa que não está mais na tela.
+  React.useEffect(() => encerrarCaptura, []);
+
+  async function iniciar() {
+    if (typeof navigator === 'undefined' || !navigator.mediaDevices?.getUserMedia) {
+      toast.error('Este navegador não permite gravar áudio.');
+      return;
+    }
+
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      streamRef.current = stream;
+      pedacosRef.current = [];
+
+      const gravador = new MediaRecorder(stream);
+      gravadorRef.current = gravador;
+
+      gravador.ondataavailable = (evento) => {
+        if (evento.data.size > 0) pedacosRef.current.push(evento.data);
+      };
+
+      gravador.onstop = async () => {
+        const pedacos = pedacosRef.current;
+        encerrarCaptura();
+        definirSegundos(0);
+
+        if (!pedacos.length) return;
+
+        const blob = new Blob(pedacos, { type: gravador.mimeType || 'audio/webm' });
+
+        definirEnviando(true);
+        try {
+          const formData = new FormData();
+          formData.set('conversaId', conversaId);
+          formData.set('audio', blob, 'nota-de-voz.webm');
+          await aoEnviar(formData);
+        } finally {
+          definirEnviando(false);
+        }
+      };
+
+      gravador.start();
+      definirGravando(true);
+      definirSegundos(0);
+      intervaloRef.current = setInterval(() => definirSegundos((atual) => atual + 1), 1000);
+    } catch {
+      toast.error('Não foi possível acessar o microfone. Confira a permissão do navegador.');
+    }
+  }
+
+  function parar() {
+    gravadorRef.current?.stop();
+    definirGravando(false);
+  }
+
+  /** Descarta sem enviar. */
+  function cancelar() {
+    pedacosRef.current = [];
+    gravadorRef.current?.stop();
+    definirGravando(false);
+  }
+
+  if (gravando) {
+    const minutos = String(Math.floor(segundos / 60)).padStart(2, '0');
+    const restoSegundos = String(segundos % 60).padStart(2, '0');
+
+    return (
+      <div className="flex h-[44px] items-center gap-2 rounded-lg border border-bruma-300 bg-white px-3">
+        <span className="h-2 w-2 shrink-0 animate-pulse rounded-full bg-marca-500" aria-hidden />
+        <span className="tabular-nums text-[13px] text-tinta-700">
+          {minutos}:{restoSegundos}
+        </span>
+        <button
+          type="button"
+          onClick={cancelar}
+          className="text-[12.5px] text-bruma-600 hover:text-tinta-900"
+        >
+          Cancelar
+        </button>
+        <Botao type="button" tamanho="pequeno" onClick={parar} className="ml-auto">
+          <Square className="h-3.5 w-3.5" aria-hidden />
+          Parar e enviar
+        </Botao>
+      </div>
+    );
+  }
+
+  return (
+    <Botao
+      type="button"
+      variante="secundario"
+      onClick={iniciar}
+      disabled={desabilitado || enviando}
+      carregando={enviando}
+      className="h-[44px] px-3"
+      title="Gravar áudio"
+    >
+      <Mic className="h-4 w-4" aria-hidden />
+    </Botao>
   );
 }
 

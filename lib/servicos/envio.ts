@@ -13,11 +13,18 @@
  * falha de infraestrutura.
  */
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { execFile } from 'node:child_process';
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { promisify } from 'node:util';
 import type { BancoDados, Canal, Mensagem, TipoMensagem } from '@/lib/tipos-banco';
 import { obterProvedorMensageria } from '@/lib/provedores/mensageria/indice';
 import { ErroProvedorMensageria, type MidiaParaEnvio } from '@/lib/provedores/mensageria/contrato';
 import { enfileirar, FILAS } from '@/lib/filas/produtor';
 import { log } from '@/lib/log';
+
+const execFileAsync = promisify(execFile);
 
 type Cliente = SupabaseClient<BancoDados>;
 
@@ -284,6 +291,58 @@ async function marcarFalha(cliente: Cliente, mensagem: Mensagem, motivo: string)
     .eq('organizacao_id', mensagem.organizacao_id);
 }
 
+/**
+ * Converte áudio para ogg/opus mono, ~16 kbps — o formato que o WhatsApp
+ * exige para tocar como nota de voz (bolha com forma de onda). Enviado
+ * em outro formato, a Evolution aceita normalmente, mas o áudio chega ao
+ * cliente como arquivo anexado comum, sem a bolha.
+ *
+ * Se o arquivo já é ogg/opus (ex.: um áudio de WhatsApp encaminhado),
+ * passa direto — reencodar de novo só perderia qualidade à toa.
+ *
+ * Só roda no worker: é lá que o Dockerfile instala o ffmpeg (ver
+ * Dockerfile.worker). Esta função nunca é chamada a partir da Vercel —
+ * `montarMidia`, quem chama, só executa dentro de `despacharMensagem`,
+ * que só o worker invoca.
+ */
+async function transcodificarParaNotaDeVoz(
+  conteudo: Buffer,
+  tipoMimeOriginal: string,
+): Promise<Buffer> {
+  if (/ogg/i.test(tipoMimeOriginal) && /opus/i.test(tipoMimeOriginal)) {
+    return conteudo;
+  }
+
+  const pasta = await mkdtemp(join(tmpdir(), 'audio-'));
+  const entrada = join(pasta, 'entrada');
+  const saida = join(pasta, 'saida.ogg');
+
+  try {
+    await writeFile(entrada, conteudo);
+    await execFileAsync('ffmpeg', [
+      '-y',
+      '-i',
+      entrada,
+      '-c:a',
+      'libopus',
+      '-ac',
+      '1',
+      '-b:a',
+      '16k',
+      '-vn',
+      saida,
+    ]);
+    return await readFile(saida);
+  } catch (erro) {
+    throw new ErroProvedorMensageria(
+      `Não foi possível converter o áudio para nota de voz: ${erro instanceof Error ? erro.message : String(erro)}`,
+      { provedor: 'INTERNO', permanente: true },
+    );
+  } finally {
+    await rm(pasta, { recursive: true, force: true });
+  }
+}
+
 async function montarMidia(
   cliente: Cliente,
   mensagem: Mensagem,
@@ -304,15 +363,23 @@ async function montarMidia(
   }
 
   const { obterProvedorArmazenamento } = await import('@/lib/provedores/armazenamento/indice');
-  const conteudo = await obterProvedorArmazenamento().baixar(arquivo.caminho);
+  const baixado = await obterProvedorArmazenamento().baixar(arquivo.caminho);
+
+  // Áudio gravado pelo atendente na própria tela chega aqui como
+  // webm/opus (o que o MediaRecorder do navegador produz) — o WhatsApp só
+  // toca como nota de voz de verdade se o arquivo for ogg/opus.
+  const conteudo =
+    mensagem.tipo === 'AUDIO'
+      ? await transcodificarParaNotaDeVoz(baixado, arquivo.tipo_mime ?? '')
+      : baixado;
 
   const tipo = mensagem.tipo === 'STICKER' ? 'IMAGEM' : mensagem.tipo;
 
   return {
     tipo: tipo as MidiaParaEnvio['tipo'],
     base64: conteudo.toString('base64'),
-    nomeArquivo: arquivo.nome_arquivo ?? 'arquivo',
-    tipoMime: arquivo.tipo_mime ?? 'application/octet-stream',
+    nomeArquivo: mensagem.tipo === 'AUDIO' ? 'audio.ogg' : (arquivo.nome_arquivo ?? 'arquivo'),
+    tipoMime: mensagem.tipo === 'AUDIO' ? 'audio/ogg; codecs=opus' : (arquivo.tipo_mime ?? 'application/octet-stream'),
     // Só assina a legenda quando existe legenda: mídia sem legenda
     // continua sem legenda, em vez de ganhar uma só para caber o nome.
     legenda: mensagem.conteudo

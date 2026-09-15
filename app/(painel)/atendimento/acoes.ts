@@ -346,6 +346,143 @@ export async function enviarMensagemManual(entrada: {
   }
 }
 
+/** Nota de voz gravada no navegador raramente passa disso. */
+const TAMANHO_MAXIMO_AUDIO_BYTES = 15 * 1024 * 1024;
+
+/**
+ * Áudio gravado na própria tela do atendente. A conversão para o formato
+ * que o WhatsApp exige numa nota de voz (ogg/opus) acontece depois, no
+ * worker, na hora do despacho — ver `transcodificarParaNotaDeVoz` em
+ * lib/servicos/envio.ts. Aqui só guarda o arquivo como o navegador mandou.
+ */
+export async function enviarAudioManual(entrada: FormData): Promise<Resultado> {
+  const conversaId = entrada.get('conversaId');
+  const audio = entrada.get('audio');
+
+  if (typeof conversaId !== 'string' || !uuid.safeParse(conversaId).success) {
+    return { ok: false, erro: 'Conversa inválida' };
+  }
+  if (!(audio instanceof File) || audio.size === 0) {
+    return { ok: false, erro: 'Nenhum áudio recebido' };
+  }
+  if (audio.size > TAMANHO_MAXIMO_AUDIO_BYTES) {
+    return { ok: false, erro: 'Áudio muito grande (acima de 15 MB)' };
+  }
+  if (!audio.type.startsWith('audio/')) {
+    return { ok: false, erro: 'Arquivo não é um áudio' };
+  }
+
+  const { sessao, supabase, conversa } = await carregarConversa(conversaId);
+  if (!conversa) return { ok: false, erro: 'Conversa não encontrada' };
+
+  if (conversa.estado === 'ENCERRADA') {
+    return { ok: false, erro: 'Esta conversa está encerrada. Reabra antes de responder.' };
+  }
+
+  if (conversa.estado !== 'HUMANO' || conversa.responsavel_id !== sessao.membro.id) {
+    const { data: assumiu } = await supabase.rpc('assumir_conversa', {
+      p_conversa_id: conversaId,
+      p_membro_id: sessao.membro.id,
+      p_motivo: 'Assumida ao responder',
+    });
+
+    if (!assumiu) {
+      return {
+        ok: false,
+        erro: 'Esta conversa está com outro atendente. Peça a transferência antes de responder.',
+      };
+    }
+  }
+
+  const { data: canal } = await supabase
+    .from('canais')
+    .select('status, ativo')
+    .eq('id', conversa.canal_id)
+    .maybeSingle();
+
+  try {
+    const bytes = Buffer.from(await audio.arrayBuffer());
+
+    const { obterProvedorArmazenamento } = await import('@/lib/provedores/armazenamento/indice');
+    const guardado = await obterProvedorArmazenamento().guardar({
+      organizacaoId: sessao.organizacao.id,
+      conteudo: bytes,
+      nomeArquivo: `nota-de-voz.${audio.type.includes('mp4') ? 'm4a' : 'webm'}`,
+      tipoMime: audio.type,
+    });
+
+    const { data: arquivo, error: erroArquivo } = await supabase
+      .from('arquivos')
+      .insert({
+        organizacao_id: sessao.organizacao.id,
+        contato_id: conversa.contato_id,
+        caminho: guardado.caminho,
+        nome_arquivo: 'nota-de-voz',
+        tipo_mime: audio.type,
+        tamanho_bytes: guardado.tamanhoBytes,
+        status_transcricao: 'NAO_APLICAVEL',
+        status_analise: 'NAO_APLICAVEL',
+      })
+      .select('id')
+      .single();
+
+    if (erroArquivo || !arquivo) {
+      throw new Error(erroArquivo?.message ?? 'falha ao registrar o arquivo');
+    }
+
+    const resultado = await enviarMensagem(supabase, {
+      organizacaoId: sessao.organizacao.id,
+      conversaId: conversa.id,
+      contatoId: conversa.contato_id,
+      canalId: conversa.canal_id,
+      autor: 'ATENDENTE',
+      autorMembroId: sessao.membro.id,
+      tipo: 'AUDIO',
+      conteudo: null,
+      arquivoId: arquivo.id,
+      chaveIdempotencia: chaveEnvioManual(conversa.id, sessao.membro.id, `audio:${guardado.tamanhoBytes}`),
+      remetenteNome: sessao.perfil.nome || sessao.perfil.email,
+    });
+
+    if (!resultado.mensagemId) {
+      return { ok: false, erro: 'Não foi possível registrar a mensagem.' };
+    }
+
+    await registrarAuditoria({
+      organizacaoId: sessao.organizacao.id,
+      acao: ACOES.MENSAGEM_ENVIADA,
+      atorPerfilId: sessao.perfil.id,
+      atorEmail: sessao.perfil.email,
+      entidade: 'mensagens',
+      entidadeId: resultado.mensagemId,
+      metadados: { conversa_id: conversa.id, tipo: 'AUDIO' },
+    });
+
+    revalidatePath('/atendimento');
+
+    if (canal && (!canal.ativo || canal.status !== 'CONECTADO')) {
+      return {
+        ok: true,
+        aviso: 'O áudio foi registrado, mas o canal não está conectado. Ele será entregue quando a conexão voltar.',
+      };
+    }
+
+    return { ok: true };
+  } catch (erro) {
+    if (erro instanceof ErroConfiguracao) {
+      return { ok: false, erro: erro.message };
+    }
+
+    log.error('Falha ao enviar áudio manual', {
+      organizacao_id: sessao.organizacao.id,
+      conversa_id: conversa.id,
+      erro: erro instanceof Error ? erro.message : String(erro),
+    });
+
+    return { ok: false, erro: 'Não foi possível enviar o áudio. Tenta de novo.' };
+  }
+}
+
 const esquemaNota = z.object({
   conversaId: uuid,
   texto: z.string().trim().min(1, 'Escreva a nota').max(2000),
