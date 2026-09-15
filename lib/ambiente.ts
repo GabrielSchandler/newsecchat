@@ -65,6 +65,14 @@ export const ambienteServidor = {
   openaiModeloTranscricao: process.env.OPENAI_MODELO_TRANSCRICAO ?? 'whisper-1',
 
   redisUrl: process.env.REDIS_URL ?? '',
+  /**
+   * De quantos em quantos segundos o worker procura, no banco, trabalho que
+   * não passou pelo Redis — é o caminho inteiro quando quem gerou o
+   * trabalho é a Vercel, que nunca tem REDIS_URL (ver lib/filas/produtor.ts,
+   * modo BANCO). Não é uma rede de segurança rara: é o atraso que toda
+   * mensagem de WhatsApp carrega antes de a IA começar a responder.
+   */
+  varreduraRapidaSegundos: Number(process.env.VARREDURA_RAPIDA_SEGUNDOS) || 3,
 
   googleClienteId: process.env.GOOGLE_CLIENT_ID ?? '',
   googleClienteSegredo: process.env.GOOGLE_CLIENT_SECRET ?? '',

@@ -5,11 +5,14 @@
  * serverless não segura conexão bloqueante com Redis nem sobrevive a um
  * trabalho de dois minutos.
  *
- * Além de consumir as filas, ele mantém três rotinas de manutenção:
+ * Além de consumir as filas, ele mantém quatro rotinas de varredura:
  *
- * - varredura de eventos de webhook que ficaram para trás (a fila pode
- *   ter estado fora do ar quando a mensagem chegou);
- * - varredura de mensagens pendentes de envio;
+ * - eventos de webhook que a Vercel delegou (todo evento que ela recebe,
+ *   sempre — ela não tem Redis, então esta varredura não é uma rede de
+ *   segurança rara, é o único caminho de entrada de toda mensagem de
+ *   WhatsApp; ver VARREDURA_RAPIDA_SEGUNDOS e IDADE_MINIMA_EVENTO_MS);
+ * - mensagens pendentes de envio que nenhum enfileiramento pegou;
+ * - campanhas retomadas depois de o worker cair no meio de um passo;
  * - sincronização periódica das planilhas.
  *
  * Sem essas varreduras, uma queda de Redis de dez minutos deixaria
@@ -38,7 +41,21 @@ const CONCORRENCIA: Record<NomeFila, number> = {
   [FILAS.analiseIa]: 1,
 };
 
-const INTERVALO_VARREDURA_MS = 60_000;
+// Antes este valor era fixo em 60_000 e VARREDURA_RAPIDA_SEGUNDOS não era
+// lido em lugar nenhum — a variável prometia "3 segundos de atraso máximo"
+// (ver comentário dela no docker-compose.yml) e entregava um minuto real,
+// perto de dois somando o buffer de IDADE_MINIMA_EVENTO_MS abaixo. Isso só
+// apareceu na primeira conversa contra o worker de verdade: a IA respondia,
+// só que só começava a trabalhar bem depois de a mensagem chegar.
+const INTERVALO_VARREDURA_MS = ambienteServidor.varreduraRapidaSegundos * 1000;
+
+// Só existe para não brigar com um enfileiramento direto que ainda esteja
+// em voo — não é o caso de eventos vindos do webhook da Vercel, que nunca
+// tem Redis e sempre depende desta varredura (modo BANCO); ali o evento já
+// está commitado no banco antes da função responder. 30 segundos fazia
+// sentido como rede de segurança rara; como caminho único de toda mensagem
+// de WhatsApp, só somava atraso sem evitar corrida nenhuma.
+const IDADE_MINIMA_EVENTO_MS = 3_000;
 
 const trabalhadores: Worker[] = [];
 let encerrando = false;
@@ -122,7 +139,7 @@ async function varrerEventosPendentes(): Promise<void> {
     .select('id')
     .in('status', ['RECEBIDO', 'FALHOU'])
     .lt('tentativas', 5)
-    .lt('recebido_em', new Date(Date.now() - 30_000).toISOString())
+    .lt('recebido_em', new Date(Date.now() - IDADE_MINIMA_EVENTO_MS).toISOString())
     .order('recebido_em', { ascending: true })
     .limit(100);
 
