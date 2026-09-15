@@ -429,3 +429,51 @@ export async function marcarComoLida(conversaId: string): Promise<Resultado> {
   if (error) return { ok: false, erro: 'Não foi possível marcar como lida.' };
   return { ok: true };
 }
+
+export interface ResultadoUrlMidia {
+  ok: boolean;
+  url?: string;
+  tipoMime?: string | null;
+  erro?: string;
+}
+
+/**
+ * Link temporário para tocar/baixar um arquivo (áudio, imagem, documento)
+ * de uma mensagem. Confere a organização antes de gerar o link — sem
+ * isso, quem soubesse o id de um arquivo de outra empresa conseguiria
+ * pedir o link dele diretamente por aqui, ignorando a tela.
+ *
+ * Devolve `ok: false` sem link, sem erro, quando o arquivo existe mas
+ * ainda não foi baixado do provedor de mensageria (`caminho` nulo) — é o
+ * caso normal nos primeiros segundos depois de a mídia chegar, antes do
+ * worker terminar de processá-la. Não é falha: a tela tenta de novo.
+ */
+export async function obterUrlMidia(arquivoId: string): Promise<ResultadoUrlMidia> {
+  if (!uuid.safeParse(arquivoId).success) return { ok: false, erro: 'Arquivo inválido' };
+
+  const sessao = await exigirSessao();
+  const supabase = await clienteServidor();
+
+  const { data: arquivo } = await supabase
+    .from('arquivos')
+    .select('caminho, tipo_mime')
+    .eq('id', arquivoId)
+    .eq('organizacao_id', sessao.organizacao.id)
+    .maybeSingle();
+
+  if (!arquivo) return { ok: false, erro: 'Arquivo não encontrado' };
+  if (!arquivo.caminho) return { ok: false };
+
+  try {
+    const { obterProvedorArmazenamento } = await import('@/lib/provedores/armazenamento/indice');
+    const url = await obterProvedorArmazenamento().urlTemporaria(arquivo.caminho);
+    return { ok: true, url, tipoMime: arquivo.tipo_mime };
+  } catch (erro) {
+    log.error('Falha ao gerar link de mídia', {
+      organizacao_id: sessao.organizacao.id,
+      arquivo_id: arquivoId,
+      erro: erro instanceof Error ? erro.message : String(erro),
+    });
+    return { ok: false, erro: 'Não foi possível gerar o link do arquivo.' };
+  }
+}

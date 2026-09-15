@@ -38,6 +38,7 @@ import {
   encerrarConversa,
   enviarMensagemManual,
   marcarComoLida,
+  obterUrlMidia,
   reabrirConversa,
   transferirConversa,
 } from './acoes';
@@ -442,7 +443,19 @@ function BalaoMensagem({ mensagem, anterior }: { mensagem: Mensagem; anterior: M
             </span>
           ) : null}
 
-          <span>{mensagem.conteudo || '—'}</span>
+          {mensagem.tipo === 'AUDIO' && mensagem.arquivo_id ? (
+            <PlayerAudio arquivoId={mensagem.arquivo_id} />
+          ) : null}
+
+          {mensagem.tipo === 'AUDIO' ? (
+            mensagem.conteudo ? (
+              <span className="italic opacity-90">“{mensagem.conteudo}”</span>
+            ) : (
+              <span className="italic opacity-60">Transcrevendo…</span>
+            )
+          ) : (
+            <span>{mensagem.conteudo || '—'}</span>
+          )}
 
           <span
             className={cn(
@@ -462,6 +475,53 @@ function BalaoMensagem({ mensagem, anterior }: { mensagem: Mensagem; anterior: M
         </div>
       </li>
     </>
+  );
+}
+
+/**
+ * Player de áudio. O link é temporário (assinado, expira em 1 hora) e
+ * gerado sob demanda — o arquivo é privado, então a tela nunca guarda
+ * uma URL fixa. Tenta uma vez, e de novo em 3s se o arquivo ainda não
+ * tiver sido baixado do provedor de mensageria (é o normal nos primeiros
+ * segundos depois de o áudio chegar).
+ */
+function PlayerAudio({ arquivoId }: { arquivoId: string }) {
+  const [url, definirUrl] = React.useState<string | null>(null);
+  const [falhou, definirFalhou] = React.useState(false);
+
+  React.useEffect(() => {
+    let cancelado = false;
+
+    async function buscar() {
+      const resultado = await obterUrlMidia(arquivoId);
+      if (cancelado) return;
+
+      if (resultado.ok && resultado.url) {
+        definirUrl(resultado.url);
+      } else if (resultado.erro) {
+        definirFalhou(true);
+      } else {
+        // Ainda sem `caminho` no arquivo: tenta de novo em breve.
+        setTimeout(() => {
+          if (!cancelado) buscar();
+        }, 3000);
+      }
+    }
+
+    void buscar();
+    return () => {
+      cancelado = true;
+    };
+  }, [arquivoId]);
+
+  if (falhou) return null;
+  if (!url) {
+    return <p className="mb-1 text-[12px] italic opacity-70">Carregando áudio…</p>;
+  }
+
+  return (
+    // eslint-disable-next-line jsx-a11y/media-has-caption -- é áudio de conversa, não vídeo com fala gravada; a transcrição já aparece logo abaixo.
+    <audio controls preload="none" src={url} className="mb-1 h-9 w-full max-w-[260px]" />
   );
 }
 
