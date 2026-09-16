@@ -560,6 +560,11 @@ function GravadorAudio({
   const pedacosRef = React.useRef<Blob[]>([]);
   const streamRef = React.useRef<MediaStream | null>(null);
   const intervaloRef = React.useRef<ReturnType<typeof setInterval> | null>(null);
+  // `stop()` dispara um último `dataavailable` antes do `onstop` — limpar
+  // pedacosRef antes de chamar stop() não bastava: esse último pedaço
+  // enchia o array de novo depois de já ter sido esvaziado, e o áudio saía
+  // mesmo cancelado. Esta flag é o que o onstop confere, não o array.
+  const canceladoRef = React.useRef(false);
 
   function encerrarCaptura() {
     streamRef.current?.getTracks().forEach((trilha) => trilha.stop());
@@ -582,6 +587,7 @@ function GravadorAudio({
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       streamRef.current = stream;
       pedacosRef.current = [];
+      canceladoRef.current = false;
 
       const gravador = new MediaRecorder(stream);
       gravadorRef.current = gravador;
@@ -591,11 +597,12 @@ function GravadorAudio({
       };
 
       gravador.onstop = async () => {
+        const cancelado = canceladoRef.current;
         const pedacos = pedacosRef.current;
         encerrarCaptura();
         definirSegundos(0);
 
-        if (!pedacos.length) return;
+        if (cancelado || !pedacos.length) return;
 
         const blob = new Blob(pedacos, { type: gravador.mimeType || 'audio/webm' });
 
@@ -626,7 +633,7 @@ function GravadorAudio({
 
   /** Descarta sem enviar. */
   function cancelar() {
-    pedacosRef.current = [];
+    canceladoRef.current = true;
     gravadorRef.current?.stop();
     definirGravando(false);
   }
