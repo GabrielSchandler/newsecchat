@@ -15,6 +15,7 @@ import {
   resolverContato,
   resolverConversaAberta,
 } from '@/lib/servicos/conversas';
+import { iaPodeResponder } from '@/lib/nucleo/estados';
 import { enfileirar } from '@/lib/filas/produtor';
 import { FILAS, type TrabalhoEventoWebhook } from '@/lib/filas/nomes';
 import { log } from '@/lib/log';
@@ -219,7 +220,7 @@ async function processarMensagem(
     return;
   }
 
-  if (estadoDepois === 'IA' && canal.ia_ativa) {
+  if (iaPodeResponder(estadoDepois) && canal.ia_ativa) {
     await enfileirar(
       FILAS.processamentoIa,
       {

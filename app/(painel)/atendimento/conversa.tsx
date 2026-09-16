@@ -17,6 +17,7 @@ import {
   Send,
   Square,
   StickyNote,
+  Trash2,
   XCircle,
 } from 'lucide-react';
 import { Botao } from '@/componentes/ui/botao';
@@ -555,11 +556,16 @@ function GravadorAudio({
   const [gravando, definirGravando] = React.useState(false);
   const [enviando, definirEnviando] = React.useState(false);
   const [segundos, definirSegundos] = React.useState(0);
+  // Parar a gravação só monta a prévia — precisa do botão Enviar pra sair.
+  const [pronto, definirPronto] = React.useState<{ blob: Blob; url: string; segundos: number } | null>(
+    null,
+  );
 
   const gravadorRef = React.useRef<MediaRecorder | null>(null);
   const pedacosRef = React.useRef<Blob[]>([]);
   const streamRef = React.useRef<MediaStream | null>(null);
   const intervaloRef = React.useRef<ReturnType<typeof setInterval> | null>(null);
+  const inicioRef = React.useRef(0);
   // `stop()` dispara um último `dataavailable` antes do `onstop` — limpar
   // pedacosRef antes de chamar stop() não bastava: esse último pedaço
   // enchia o array de novo depois de já ter sido esvaziado, e o áudio saía
@@ -573,9 +579,19 @@ function GravadorAudio({
     intervaloRef.current = null;
   }
 
-  // Some ao trocar de conversa com a gravação em andamento — sem isso o
-  // microfone continuaria ligado numa conversa que não está mais na tela.
-  React.useEffect(() => encerrarCaptura, []);
+  // Sai da tela (troca de conversa, digitou texto e o componente foi
+  // substituído pelo botão Enviar, etc.) com gravação em andamento ou
+  // prévia pronta — nos dois casos, cancela. Nada é enviado sem o clique
+  // explícito em "Enviar".
+  React.useEffect(() => {
+    return () => {
+      if (gravadorRef.current && gravadorRef.current.state !== 'inactive') {
+        canceladoRef.current = true;
+        gravadorRef.current.stop();
+      }
+      encerrarCaptura();
+    };
+  }, []);
 
   async function iniciar() {
     if (typeof navigator === 'undefined' || !navigator.mediaDevices?.getUserMedia) {
@@ -596,28 +612,21 @@ function GravadorAudio({
         if (evento.data.size > 0) pedacosRef.current.push(evento.data);
       };
 
-      gravador.onstop = async () => {
+      gravador.onstop = () => {
         const cancelado = canceladoRef.current;
         const pedacos = pedacosRef.current;
+        const duracao = Math.round((Date.now() - inicioRef.current) / 1000);
         encerrarCaptura();
         definirSegundos(0);
 
         if (cancelado || !pedacos.length) return;
 
         const blob = new Blob(pedacos, { type: gravador.mimeType || 'audio/webm' });
-
-        definirEnviando(true);
-        try {
-          const formData = new FormData();
-          formData.set('conversaId', conversaId);
-          formData.set('audio', blob, 'nota-de-voz.webm');
-          await aoEnviar(formData);
-        } finally {
-          definirEnviando(false);
-        }
+        definirPronto({ blob, url: URL.createObjectURL(blob), segundos: duracao });
       };
 
       gravador.start();
+      inicioRef.current = Date.now();
       definirGravando(true);
       definirSegundos(0);
       intervaloRef.current = setInterval(() => definirSegundos((atual) => atual + 1), 1000);
@@ -626,16 +635,72 @@ function GravadorAudio({
     }
   }
 
+  /** Só para — a prévia fica pra conferir antes de mandar. */
   function parar() {
     gravadorRef.current?.stop();
     definirGravando(false);
   }
 
-  /** Descarta sem enviar. */
+  /** Descarta sem enviar — vale gravando ou já parado com prévia pronta. */
   function cancelar() {
+    if (pronto) {
+      URL.revokeObjectURL(pronto.url);
+      definirPronto(null);
+      return;
+    }
     canceladoRef.current = true;
     gravadorRef.current?.stop();
     definirGravando(false);
+  }
+
+  async function enviar() {
+    if (!pronto) return;
+    const { blob, url } = pronto;
+
+    definirEnviando(true);
+    try {
+      const formData = new FormData();
+      formData.set('conversaId', conversaId);
+      formData.set('audio', blob, 'nota-de-voz.webm');
+      await aoEnviar(formData);
+      URL.revokeObjectURL(url);
+      definirPronto(null);
+    } finally {
+      definirEnviando(false);
+    }
+  }
+
+  if (pronto) {
+    const minutos = String(Math.floor(pronto.segundos / 60)).padStart(2, '0');
+    const restoSegundos = String(pronto.segundos % 60).padStart(2, '0');
+
+    return (
+      <div className="flex h-[44px] items-center gap-2 rounded-lg border border-bruma-300 bg-white px-3">
+        <button
+          type="button"
+          onClick={cancelar}
+          disabled={enviando}
+          className="shrink-0 text-bruma-600 hover:text-erro-600"
+          title="Descartar"
+        >
+          <Trash2 className="h-4 w-4" aria-hidden />
+        </button>
+        <span className="tabular-nums text-[13px] text-tinta-700">
+          {minutos}:{restoSegundos}
+        </span>
+        <audio src={pronto.url} controls className="h-8 flex-1" />
+        <Botao
+          type="button"
+          tamanho="pequeno"
+          onClick={enviar}
+          carregando={enviando}
+          className="ml-auto shrink-0"
+        >
+          <Send className="h-3.5 w-3.5" aria-hidden />
+          Enviar
+        </Botao>
+      </div>
+    );
   }
 
   if (gravando) {
@@ -657,7 +722,7 @@ function GravadorAudio({
         </button>
         <Botao type="button" tamanho="pequeno" onClick={parar} className="ml-auto">
           <Square className="h-3.5 w-3.5" aria-hidden />
-          Parar e enviar
+          Parar
         </Botao>
       </div>
     );

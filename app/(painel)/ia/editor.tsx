@@ -79,6 +79,7 @@ export function EditorAgente({
   const [fallback, definirFallback] = React.useState(
     base?.mensagem_fallback ?? 'Vou chamar um atendente para te ajudar com isso.',
   );
+  const [primeiraMensagem, definirPrimeiraMensagem] = React.useState(base?.primeira_mensagem ?? '');
   const [perguntas, definirPerguntas] = React.useState(lerLista(base?.perguntas).join('\n'));
   const [criterios, definirCriterios] = React.useState(
     lerLista(base?.criterios_transferencia).join('\n'),
@@ -138,6 +139,7 @@ export function EditorAgente({
           limitacoes,
           informacoesProibidas: proibidas,
           mensagemFallback: fallback,
+          primeiraMensagem,
           perguntas: perguntas.split('\n').map((linha) => linha.trim()).filter(Boolean),
           criteriosTransferencia: criterios
             .split('\n')
@@ -256,6 +258,22 @@ export function EditorAgente({
               disabled={!podeEditar}
               maxLength={60}
               placeholder="Ana"
+            />
+          </Campo>
+
+          <Campo
+            rotulo="Primeira mensagem"
+            htmlFor="ia-primeira-mensagem"
+            ajuda="Texto fixo, enviado sem passar pelo modelo — como um bot de saudação. Garante uma estreia sempre boa, em vez de a IA improvisar a cada conversa nova. Em branco, ela mesma escreve a primeira resposta, como qualquer outra."
+          >
+            <AreaTexto
+              id="ia-primeira-mensagem"
+              value={primeiraMensagem}
+              onChange={(evento) => definirPrimeiraMensagem(evento.target.value)}
+              rows={3}
+              disabled={!podeEditar}
+              maxLength={1000}
+              placeholder="Oi! Eu sou a Ana, da GRS Soluções 👋 Ajudo a identificar se o seu contrato tem juros ou tarifas cobradas a mais — sem custo nessa etapa. Me conta rapidinho: o que te trouxe até aqui hoje?"
             />
           </Campo>
 

@@ -393,6 +393,12 @@ export type VersaoAgenteIa = {
   limitacoes: string;
   informacoes_proibidas: string;
   mensagem_fallback: string;
+  /**
+   * Texto fixo da primeira resposta da conversa — enviado sem chamar o
+   * modelo, como um bot de saudação. Em branco, a primeira resposta
+   * também é gerada pela IA normalmente.
+   */
+  primeira_mensagem: string;
   perguntas: Json;
   campos_obrigatorios: Json;
   criterios_transferencia: Json;

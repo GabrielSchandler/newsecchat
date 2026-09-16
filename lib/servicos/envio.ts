@@ -396,13 +396,13 @@ async function montarMidia(
  *
  * Uma quebra de linha só, não duas: no WhatsApp, "*Nome*\n\n" deixa uma
  * linha em branco entre o nome e o texto — pediram só a quebra, sem a
- * linha vazia no meio.
+ * linha vazia no meio. E o nome leva ":" antes da quebra ("*Nome*:\n").
  *
  * Aplicado aqui, na hora do envio — nunca pedido à IA no prompt — para
  * ficar consistente sempre, sem depender do modelo lembrar de formatar
  * certo em toda resposta. `mensagem.conteudo` (o que fica gravado e o
  * que a IA lê no histórico) permanece sem o prefixo; só o texto que sai
- * para o WhatsApp ganha o "*Nome*\n" na frente.
+ * para o WhatsApp ganha o "*Nome*:\n" na frente.
  *
  * Sem remetente (mensagem de sistema ou de campanha), o texto sai como
  * foi escrito, sem prefixo nem mudança de caixa.
@@ -413,7 +413,7 @@ function formatarParaEnvio(remetenteNome: string | null | undefined, conteudo: s
   const comMaiuscula = conteudo.charAt(0).toUpperCase() + conteudo.slice(1);
   if (!remetenteNome) return comMaiuscula;
 
-  return `*${remetenteNome}*\n${comMaiuscula}`;
+  return `*${remetenteNome}*:\n${comMaiuscula}`;
 }
 
 /** Canal pronto para enviar? Usado pela interface antes de oferecer a ação. */

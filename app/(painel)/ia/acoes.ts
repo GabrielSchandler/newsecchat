@@ -31,6 +31,7 @@ const esquemaConteudo = z.object({
   limitacoes: z.string().max(4000),
   informacoesProibidas: z.string().max(4000),
   mensagemFallback: z.string().max(500),
+  primeiraMensagem: z.string().max(1000),
   perguntas: z.array(z.string().max(300)).max(30),
   criteriosTransferencia: z.array(z.string().max(300)).max(30),
   horarios: z.record(z.unknown()),
@@ -52,6 +53,7 @@ function paraColunas(conteudo: ConteudoVersao) {
     limitacoes: conteudo.limitacoes,
     informacoes_proibidas: conteudo.informacoesProibidas,
     mensagem_fallback: conteudo.mensagemFallback,
+    primeira_mensagem: conteudo.primeiraMensagem,
     perguntas: conteudo.perguntas as unknown as Json,
     criterios_transferencia: conteudo.criteriosTransferencia as unknown as Json,
     horarios: conteudo.horarios as unknown as Json,
@@ -241,6 +243,7 @@ export async function restaurarVersao(versaoId: string): Promise<Resultado> {
     limitacoes: origem.limitacoes,
     informacoesProibidas: origem.informacoes_proibidas,
     mensagemFallback: origem.mensagem_fallback,
+    primeiraMensagem: origem.primeira_mensagem,
     perguntas: Array.isArray(origem.perguntas) ? (origem.perguntas as unknown[]).map(String) : [],
     criteriosTransferencia: Array.isArray(origem.criterios_transferencia)
       ? (origem.criterios_transferencia as unknown[]).map(String)
@@ -579,6 +582,7 @@ function montarConteudo(
     limitacoes: ler('limitacoes', ''),
     informacoesProibidas: ler('informacoes_proibidas', ''),
     mensagemFallback: ler('mensagem_fallback', 'Vou chamar um atendente para te ajudar com isso.'),
+    primeiraMensagem: ler('primeira_mensagem', ''),
     perguntas: Array.isArray(base.perguntas) ? (base.perguntas as unknown[]).map(String) : [],
     criteriosTransferencia: Array.isArray(base.criterios_transferencia)
       ? (base.criterios_transferencia as unknown[]).map(String)

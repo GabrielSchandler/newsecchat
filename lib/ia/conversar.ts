@@ -24,6 +24,7 @@ import type {
 } from '@/lib/tipos-banco';
 import { obterProvedorIa } from '@/lib/provedores/ia/indice';
 import { ErroProvedorIa } from '@/lib/provedores/ia/contrato';
+import { iaPodeResponder } from '@/lib/nucleo/estados';
 import { montarContexto, type ContextoConversa } from './contexto';
 import { montarMensagemUsuario, montarPromptSistema } from './prompt';
 import { esquemaDecisaoIa, esquemaDecisaoJson, type DecisaoIa } from './esquemas';
@@ -60,7 +61,7 @@ export async function executarTurnoIa(
   if (error) throw new Error(`Falha ao ler a conversa: ${error.message}`);
   if (!conversa) return { situacao: 'IGNORADO', motivo: 'Conversa não encontrada' };
 
-  if (conversa.estado !== 'IA') {
+  if (!iaPodeResponder(conversa.estado)) {
     registro.info('Turno da IA descartado: a conversa não está com a IA', {
       estado: conversa.estado,
     });
@@ -93,6 +94,44 @@ export async function executarTurnoIa(
   }
 
   const contexto = await montarContexto(cliente, conversa);
+
+  // Primeira mensagem da conversa, com texto fixo configurado: manda como
+  // um bot de saudação, sem chamar o modelo — e sem o risco de a IA
+  // improvisar uma estreia fraca. Da segunda mensagem do cliente em
+  // diante, ela volta a ler o histórico e responder normalmente.
+  if (contexto.totalMensagens <= 1 && versao.primeira_mensagem.trim()) {
+    const { data: mensagemId, error: erroPrimeira } = await cliente.rpc('registrar_mensagem_ia', {
+      p_conversa_id: conversaId,
+      p_conteudo: versao.primeira_mensagem.trim(),
+      p_chave_idempotencia: chaveRespostaIa(conversaId, mensagemGatilhoId),
+      p_metadados: {
+        agente_id: agente.id,
+        versao_id: versao.id,
+        primeira_mensagem: true,
+      } as unknown as Json,
+      p_remetente_nome: versao.nome_exibicao ?? null,
+    });
+
+    if (erroPrimeira) {
+      throw new Error(`Falha ao registrar a primeira mensagem: ${erroPrimeira.message}`);
+    }
+
+    if (!mensagemId) {
+      return { situacao: 'IGNORADO', motivo: 'Um humano assumiu durante o processamento' };
+    }
+
+    await enfileirar(
+      FILAS.mensagensEnviadas,
+      { mensagemId, organizacaoId },
+      { id: `envio:${mensagemId}` },
+    );
+
+    return {
+      situacao: 'RESPONDEU',
+      mensagemId,
+      decisao: { ...decisaoVazia(), resposta: versao.primeira_mensagem.trim(), precisa_humano: false, confianca: 1 },
+    };
+  }
 
   const seguidas = contarMensagensSeguidasDaIa(contexto);
   if (seguidas >= agente.max_mensagens_seguidas) {

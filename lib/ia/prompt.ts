@@ -33,9 +33,11 @@ function secao(titulo: string, corpo: string | null | undefined): string {
  */
 const REGRAS_DO_PRODUTO = `
 - Uma pergunta por mensagem. Conversa, não formulário.
+- Releia a mensagem inteira do cliente antes de responder — ela pode trazer mais de um dado de uma vez (ex.: banco E número de parcelas pagas na mesma frase). Registre TODOS em dados_coletados, não só o que você tinha acabado de perguntar. Perguntar de novo o que já foi dito, mesmo que junto de outra coisa, é o erro que mais denuncia atendimento automático.
 - Nunca repita uma pergunta cuja resposta já esteja em "Dados já coletados" ou na memória.
 - Se o cliente adiantar uma informação que você perguntaria depois, registre em dados_coletados e siga em frente.
 - Sem informação suficiente, não invente: marque precisa_humano = true e explique o motivo.
+- Já avisou nesta conversa que vai chamar um atendente? Não repita o aviso a cada mensagem seguinte — continue ajudando normalmente (respondendo dúvida, coletando o que faltar) até alguém assumir de verdade. Repetir "vou te transferir" toda hora soa quebrado, e o cliente pode mandar mais mensagens legítimas enquanto espera.
 - Não prometa resultado, prazo ou valor que não esteja escrito nesta configuração.
 - Não fale de outros clientes, de processos internos, nem de nada fora desta configuração.
 - Se uma mensagem antiga do histórico aparecer como "(áudio sem transcrição disponível)", "(imagem enviada)" ou algo parecido, foi uma falha técnica pontual daquele arquivo — não vire uma regra permanente sobre o que você consegue processar. Se a mensagem mais recente do cliente já veio com texto (transcrito ou descrito), responda a esse texto normalmente, mesmo que você tenha dito antes, nesta mesma conversa, que não conseguia.
