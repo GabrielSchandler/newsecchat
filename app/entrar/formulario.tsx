@@ -67,7 +67,7 @@ export function FormularioEntrada({ nomeAplicacao }: { nomeAplicacao: string }) 
           : 'Crie o primeiro acesso. Na tela seguinte você monta a organização.'}
       </p>
 
-      <form onSubmit={aoEnviar} className="mt-7 space-y-4">
+      <form onSubmit={aoEnviar} className="mt-7 space-y-4 [&_label]:text-bruma-100">
         {modo === 'CADASTRAR' ? (
           <Campo rotulo="Seu nome" htmlFor="nome" obrigatorio>
             <Entrada
@@ -76,7 +76,7 @@ export function FormularioEntrada({ nomeAplicacao }: { nomeAplicacao: string }) 
               autoComplete="name"
               required
               placeholder="Como você quer ser chamado"
-              className="border-tinta-700 bg-tinta-900 text-white placeholder:text-bruma-600 focus:border-produto-500"
+              className="border-tinta-700 bg-tinta-900 text-white placeholder:text-bruma-400 focus:border-produto-500"
             />
           </Campo>
         ) : null}
@@ -89,7 +89,7 @@ export function FormularioEntrada({ nomeAplicacao }: { nomeAplicacao: string }) 
             autoComplete="email"
             required
             placeholder="voce@empresa.com.br"
-            className="border-tinta-700 bg-tinta-900 text-white placeholder:text-bruma-600 focus:border-produto-500"
+            className="border-tinta-700 bg-tinta-900 text-white placeholder:text-bruma-400 focus:border-produto-500"
           />
         </Campo>
 
@@ -109,7 +109,7 @@ export function FormularioEntrada({ nomeAplicacao }: { nomeAplicacao: string }) 
             type="password"
             autoComplete={modo === 'ENTRAR' ? 'current-password' : 'new-password'}
             required
-            className="border-tinta-700 bg-tinta-900 text-white placeholder:text-bruma-600 focus:border-produto-500"
+            className="border-tinta-700 bg-tinta-900 text-white placeholder:text-bruma-400 focus:border-produto-500"
           />
         </Campo>
 

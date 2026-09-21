@@ -6,7 +6,7 @@ Atualizado em 21/09/2026. Repaginação baseada nas 12 telas aprovadas pelo prop
 
 - Cópia de trabalho desta repaginação: `C:\Users\Useer\Documents\GitHub\GRSCRM\tmp\newsecchat-redesign`.
 - Repositório remoto: https://github.com/GabrielSchandler/newsecchat
-- Cópia original anterior: `C:\Users\Useer\Documents\GitHub\newsecchat`.
+- Pasta principal, sincronizada ao final da publicação: `C:\Users\Useer\Documents\GitHub\newsecchat`.
 - Interface publicada: https://newsecchat.vercel.app
 - Worker de produção: `/opt/newsecchat`, no servidor existente. Configuração privada em `.env.local` no servidor.
 - MazyOS é a memória operacional da empresa, não o código do Chat. Pasta: `C:\Users\Useer\OneDrive - 50.020.315 TATIANE MOREIRA DOS SANTOS\Área de Trabalho\PROJETOS\MazyOS`.
@@ -45,3 +45,5 @@ Antes da publicação foi preservada a imagem `newsecchat-worker:pre-redesign-20
 As métricas de espera humana têm cobertura prospectiva: registros antigos sem eventos necessários ficam fora dos indicadores e aparecem como cobertura incompleta. Confirmação automática e nota interna não contam como resposta humana. O teste com SIMULADO não comprova entrega em um WhatsApp real; essa operação depende da sessão do canal e do provedor.
 
 O registro final da publicação, hash do commit e verificações está em `PUBLICACAO-2026-09-21.md` quando a publicação estiver concluída.
+
+As seis imagens aprovadas e o prompt estão preservados em docs/referencias/newsec-chat. Use-os como referência visual, mantendo os dados reais e as regras de acesso.

@@ -23,6 +23,7 @@ import {
   ArrowLeft,
   UserRound,
   Sparkles,
+  XCircle,
 } from 'lucide-react';
 import { Botao } from '@/componentes/ui/botao';
 import { AreaTexto, Campo, Selecao } from '@/componentes/ui/campo';
