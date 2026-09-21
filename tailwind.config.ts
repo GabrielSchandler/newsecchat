@@ -1,84 +1,19 @@
 import type { Config } from 'tailwindcss';
-
-/**
- * Paleta NewSec — os valores vêm do site do produto (GRSCRM-SITE,
- * `src/app/globals.css`), pra que os três produtos da marca pareçam a
- * mesma família. Regras que não se quebram:
- *
- * - `brand-500` como TEXTO sobre fundo escuro fica na fronteira do WCAG AA.
- *   Em fundo escuro usar `brand-300`. Como fundo de botão com texto branco,
- *   `brand-500` é válido.
- * - Raio máximo de 8px em qualquer elemento.
- * - Vermelho é acento (erro, marca, destaque). A cor de AÇÃO do produto é o
- *   verde-petróleo `produto-700` — o operador passa horas nesta tela e um
- *   vermelho em cada botão cansa.
- */
+import animate from 'tailwindcss-animate';
 const config: Config = {
-  darkMode: ['class'],
-  content: [
-    './app/**/*.{ts,tsx}',
-    './componentes/**/*.{ts,tsx}',
-    './lib/**/*.{ts,tsx}',
-  ],
-  theme: {
-    extend: {
-      colors: {
-        tinta: {
-          950: '#0b0b0d',
-          900: '#121317',
-          850: '#17181d',
-          800: '#1b1b1f',
-          700: '#2a2d35',
-          600: '#3a3e48',
-        },
-        bruma: {
-          600: '#5f6674',
-          500: '#7b8393',
-          400: '#9aa1b0',
-          300: '#c2c7d1',
-          200: '#e2e5ea',
-          100: '#f1f3f6',
-          50: '#f7f8fa',
-        },
-        marca: {
-          50: '#fdeced',
-          300: '#ff5a5f',
-          500: '#e31b23',
-          600: '#b5121a',
-        },
-        produto: {
-          50: '#f0fdfa',
-          100: '#ccfbf1',
-          500: '#14b8a6',
-          700: '#0f766e',
-          800: '#115e59',
-        },
-        osso: '#faf9f7',
-        tela: '#f7f8fa',
-        sucesso: { 100: '#dcfce7', 600: '#16a34a', 700: '#15803d' },
-        alerta: { 100: '#fef3c7', 600: '#d97706', 700: '#b45309' },
-      },
-      fontFamily: {
-        sans: ['var(--fonte-sora)', 'ui-sans-serif', 'system-ui', 'sans-serif'],
-      },
-      borderRadius: {
-        lg: '8px',
-        xl: '8px',
-        '2xl': '8px',
-        '3xl': '8px',
-      },
-      keyframes: {
-        'entrar-suave': {
-          from: { opacity: '0', transform: 'translateY(4px)' },
-          to: { opacity: '1', transform: 'translateY(0)' },
-        },
-      },
-      animation: {
-        'entrar-suave': 'entrar-suave 160ms ease-out',
-      },
+  darkMode: ['class'], content: ['./app/**/*.{ts,tsx}', './componentes/**/*.{ts,tsx}', './lib/**/*.{ts,tsx}'],
+  theme: { extend: {
+    colors: {
+      tinta: { 950: '#102438', 900: '#15283B', 850: '#172E3D', 800: '#234055', 700: '#344C63', 600: '#465F77' },
+      bruma: { 600: '#58697C', 500: '#677C91', 400: '#8B9AAF', 300: '#CBD8E4', 200: '#DCE5EC', 100: '#EDF3F7', 50: '#F8FAFC' },
+      marca: { 50: '#FFF0F2', 300: '#E9586C', 500: '#C63546', 600: '#A92234' },
+      produto: { 50: '#E6F6FB', 100: '#D6F0FA', 500: '#00A7CD', 700: '#0087A5', 800: '#006F8A' },
+      tela: '#F4F7FA', osso: '#FAFCFE', sucesso: { 100: '#E3F8ED', 600: '#16835D', 700: '#116947' },
+      alerta: { 100: '#FFF2DC', 600: '#CB6B15', 700: '#A95009' }, ia: { 50: '#F0EAFF', 600: '#6D4AFF', 700: '#5734D6' },
     },
-  },
-  plugins: [require('tailwindcss-animate')],
+    fontFamily: { sans: ['Segoe UI', 'Helvetica Neue', 'Arial', 'sans-serif'] },
+    borderRadius: { lg: '7px', xl: '9px', '2xl': '9px', '3xl': '9px' },
+  } },
+  plugins: [animate],
 };
-
 export default config;

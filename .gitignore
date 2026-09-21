@@ -5,6 +5,7 @@
 
 # Build
 /.next/
+/.next-dev/
 /out/
 /build
 next-env.d.ts
@@ -36,3 +37,6 @@ npm-debug.log*
 
 # Docker
 /dados-redis
+
+# Evidências e dados fictícios da validação local
+/.validacao/

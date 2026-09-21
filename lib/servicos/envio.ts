@@ -201,6 +201,7 @@ export async function despacharMensagem(
     return { status: 'FALHOU', motivo: 'Contato bloqueado' };
   }
 
+  let iniciouChamada = false;
   try {
     const provedor = obterProvedorMensageria(canal.provedor);
     const canalEnvio = {
@@ -209,6 +210,12 @@ export async function despacharMensagem(
       identificador_externo: canal.identificador_externo,
     };
 
+    // Prepare a mídia antes de começar a chamada externa. A última decisão é atômica no banco.
+    const midia = mensagem.tipo !== 'TEXTO' && mensagem.arquivo_id ? await montarMidia(cliente, mensagem, organizacaoId) : null;
+    const inicio = await cliente.rpc('iniciar_despacho', { p_mensagem: mensagem.id, p_org: organizacaoId });
+    if (inicio.error) throw new Error(inicio.error.message);
+    if (!inicio.data) return { status: 'IGNORADA', motivo: 'Atendimento mudou antes do envio' };
+    iniciouChamada = true;
     const resposta =
       mensagem.tipo === 'TEXTO' || !mensagem.arquivo_id
         ? await provedor.enviarTexto(
@@ -219,10 +226,10 @@ export async function despacharMensagem(
         : await provedor.enviarMidia(
             canalEnvio,
             contato.telefone,
-            await montarMidia(cliente, mensagem, organizacaoId),
+            midia!,
           );
 
-    await cliente
+    const confirmacao = await cliente
       .from('mensagens')
       .update({
         status: 'ENVIADA',
@@ -234,6 +241,7 @@ export async function despacharMensagem(
       .eq('id', mensagem.id)
       .eq('organizacao_id', organizacaoId);
 
+    if (confirmacao.error) throw new Error('Provedor aceitou, mas a confirmação não foi persistida');
     registro.info('Mensagem entregue ao provedor', { provedor: canal.provedor });
     return { status: 'ENVIADA' };
   } catch (erro) {
@@ -246,8 +254,11 @@ export async function despacharMensagem(
       return { status: 'FALHOU', motivo: descricao };
     }
 
-    // Erro temporário: devolve a reserva, deixa PENDENTE e deixa a fila
-    // tentar de novo.
+    if (iniciouChamada) {
+      await cliente.from('mensagens').update({ despacho_incerto: true, erro: 'Entrega em confirmação: ' + descricao }).eq('id', mensagem.id).eq('organizacao_id', organizacaoId);
+      return { status: 'IGNORADA', motivo: 'Entrega em confirmação; reenvio automático bloqueado' };
+    }
+    // Falha anterior à chamada externa permite uma nova tentativa.
     await cliente
       .from('mensagens')
       .update({ erro: descricao, despacho_reservado_ate: null })

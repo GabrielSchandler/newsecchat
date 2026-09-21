@@ -147,7 +147,7 @@ export async function carregarDetalheConversa(
 
   if (!conversa) return null;
 
-  const [contatoResposta, canalResposta, mensagensResposta, notasResposta, memoriasResposta] =
+  const [contatoResposta, canalResposta, mensagensResposta, notasResposta, memoriasResposta, eventosResposta] =
     await Promise.all([
       supabase
         .from('contatos')
@@ -167,6 +167,7 @@ export async function carregarDetalheConversa(
         .eq('organizacao_id', organizacaoId)
         .eq('conversa_id', conversaId)
         .order('criado_em', { ascending: false })
+        .order('id', { ascending: false })
         .limit(120),
       supabase
         .from('notas_internas')
@@ -183,6 +184,7 @@ export async function carregarDetalheConversa(
         .eq('ativo', true)
         .order('atualizado_em', { ascending: false })
         .limit(20),
+      supabase.from("eventos_conversa").select("*").eq("organizacao_id",organizacaoId).eq("conversa_id",conversaId).order("criado_em",{ascending:false}).limit(60),
     ]);
 
   if (contatoResposta.error || !contatoResposta.data) return null;
@@ -238,6 +240,7 @@ export async function carregarDetalheConversa(
       autorNome: nota.autor_membro_id ? autoresNotas.get(nota.autor_membro_id) ?? null : null,
     })),
     memorias: memoriasResposta.data ?? [],
+    eventos: eventosResposta.data ?? [],
     campos,
     etiquetasDoContato: etiquetasContato,
     etiquetasDaConversa: etiquetasConversa,

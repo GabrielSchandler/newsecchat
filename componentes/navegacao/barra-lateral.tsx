@@ -1,149 +1,33 @@
 'use client';
-
 import * as React from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import {
-  BarChart3,
-  Bot,
-  LogOut,
-  MessageSquareText,
-  Megaphone,
-  Menu,
-  Plug,
-  Settings,
-  Users,
-  X,
-} from 'lucide-react';
+import { BarChart3, Sparkles, LogOut, MessageSquare, Megaphone, Menu, Plug, Settings, UserRound, UsersRound, X, Clock3, MessageSquareText, ChartNoAxesCombined, ChevronRight } from 'lucide-react';
 import { cn, iniciais } from '@/lib/utilitarios';
 import type { ItemMenu, NomeIcone } from '@/lib/menu';
 import { sair } from '@/app/entrar/acoes';
-
-const ICONES: Record<NomeIcone, React.ComponentType<{ className?: string }>> = {
-  conversas: MessageSquareText,
-  painel: BarChart3,
-  contatos: Users,
-  campanhas: Megaphone,
-  ia: Bot,
-  integracoes: Plug,
-  configuracoes: Settings,
+const ICONES: Record<NomeIcone, typeof MessageSquare> = {
+  conversas: MessageSquare, painel: ChartNoAxesCombined, contatos: UserRound, campanhas: Megaphone,
+  ia: Sparkles, integracoes: Plug, configuracoes: Settings, retornos: Clock3, respostas: MessageSquareText, equipes: UsersRound, relatorios: BarChart3,
 };
-
-export interface PropriedadesBarraLateral {
-  itens: ItemMenu[];
-  nomeAplicacao: string;
-  nomeOrganizacao: string;
-  nomeUsuario: string;
-  papelUsuario: string;
-}
-
-export function BarraLateral(propriedades: PropriedadesBarraLateral) {
-  const [abertaNoCelular, definirAberta] = React.useState(false);
-  const caminho = usePathname();
-
-  // Navegou: fecha o menu do celular. Sem isso, o painel fica por cima do
-  // conteúdo que o usuário acabou de abrir.
-  React.useEffect(() => {
-    definirAberta(false);
-  }, [caminho]);
-
-  return (
-    <>
-      <button
-        type="button"
-        onClick={() => definirAberta(true)}
-        className="fixed left-3 top-3 z-30 flex h-9 w-9 items-center justify-center rounded-lg border border-bruma-300 bg-white text-tinta-800 shadow-sm lg:hidden"
-        aria-label="Abrir menu"
-      >
-        <Menu className="h-4.5 w-4.5" />
-      </button>
-
-      {abertaNoCelular ? (
-        <button
-          type="button"
-          className="fixed inset-0 z-40 bg-tinta-950/50 lg:hidden"
-          onClick={() => definirAberta(false)}
-          aria-label="Fechar menu"
-        />
-      ) : null}
-
-      <aside
-        className={cn(
-          'fixed inset-y-0 left-0 z-50 flex w-[232px] flex-col bg-tinta-950 transition-transform lg:static lg:translate-x-0',
-          abertaNoCelular ? 'translate-x-0' : '-translate-x-full',
-        )}
-      >
-        <div className="flex items-center justify-between px-4 py-4">
-          <Link href="/atendimento" className="flex min-w-0 items-center gap-2.5">
-            <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-marca-500">
-              <MessageSquareText className="h-4 w-4 text-white" aria-hidden />
-            </span>
-            <span className="truncate text-[14.5px] font-semibold tracking-tight text-white">
-              {propriedades.nomeAplicacao}
-            </span>
-          </Link>
-          <button
-            type="button"
-            onClick={() => definirAberta(false)}
-            className="rounded-lg p-1 text-bruma-500 hover:text-white lg:hidden"
-            aria-label="Fechar menu"
-          >
-            <X className="h-4 w-4" />
-          </button>
-        </div>
-
-        <nav className="flex-1 space-y-0.5 overflow-y-auto rolagem-fina px-2.5 py-2">
-          {propriedades.itens.map((item) => {
-            const Icone = ICONES[item.icone];
-            const ativo = item.prefixo
-              ? caminho === item.caminho || caminho.startsWith(`${item.caminho}/`)
-              : caminho === item.caminho;
-
-            return (
-              <Link
-                key={item.caminho}
-                href={item.caminho}
-                aria-current={ativo ? 'page' : undefined}
-                className={cn(
-                  'flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-[13.5px] font-medium transition-colors',
-                  ativo
-                    ? 'bg-tinta-800 text-white'
-                    : 'text-bruma-400 hover:bg-tinta-900 hover:text-bruma-200',
-                )}
-              >
-                <Icone className="h-4 w-4 shrink-0" />
-                <span className="truncate">{item.rotulo}</span>
-              </Link>
-            );
-          })}
-        </nav>
-
-        <div className="border-t border-tinta-800 p-2.5">
-          <div className="flex items-center gap-2.5 rounded-lg px-2.5 py-2">
-            <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-tinta-800 text-[11px] font-semibold text-bruma-200">
-              {iniciais(propriedades.nomeUsuario)}
-            </span>
-            <span className="min-w-0 flex-1">
-              <span className="block truncate text-[12.5px] font-medium text-bruma-200">
-                {propriedades.nomeUsuario}
-              </span>
-              <span className="block truncate text-[11px] text-bruma-600">
-                {propriedades.papelUsuario} · {propriedades.nomeOrganizacao}
-              </span>
-            </span>
-          </div>
-
-          <form action={sair}>
-            <button
-              type="submit"
-              className="mt-0.5 flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-[13px] font-medium text-bruma-500 transition-colors hover:bg-tinta-900 hover:text-bruma-200"
-            >
-              <LogOut className="h-4 w-4 shrink-0" />
-              Sair
-            </button>
-          </form>
-        </div>
-      </aside>
-    </>
-  );
+export interface PropriedadesBarraLateral { itens: ItemMenu[]; nomeAplicacao: string; nomeOrganizacao: string; nomeUsuario: string; papelUsuario: string }
+export function BarraLateral(props: PropriedadesBarraLateral) {
+  const [aberta, setAberta] = React.useState(false); const caminho = usePathname();
+  React.useEffect(() => setAberta(false), [caminho]);
+  function item(i: ItemMenu) {
+    const Icone = ICONES[i.icone]; const ativo = caminho === i.caminho || !!i.prefixo && caminho.startsWith(i.caminho + '/');
+    return <Link key={i.caminho} href={i.caminho} aria-current={ativo ? 'page' : undefined} className={cn('item-menu', ativo && 'item-menu-ativo')}><Icone size={18}/><span>{i.rotulo}</span></Link>;
+  }
+  return <>
+    <button className="abrir-menu" onClick={() => setAberta(true)} aria-label="Abrir navegação"><Menu size={21}/></button>
+    {aberta && <button className="cobertura-menu" onClick={() => setAberta(false)} aria-label="Fechar navegação"/>}
+    <aside className={cn('barra-navegacao', aberta && 'navegacao-aberta')}>
+      <div className="marca-aplicacao"><Link href="/atendimento" aria-label={props.nomeAplicacao}><strong>newsec</strong><span>CHAT</span></Link><button className="lg:hidden" aria-label="Fechar menu" onClick={() => setAberta(false)}><X size={19}/></button></div>
+      <nav className="navegacao-principal" aria-label="Navegação principal">{props.itens.filter(i => !i.secundario && i.icone !== 'configuracoes').map(item)}
+        {props.itens.some(i => i.secundario) && <details className="mt-5"><summary className="cursor-pointer px-3 py-2 text-xs text-slate-300">Mais ferramentas</summary>{props.itens.filter(i => i.secundario).map(item)}</details>}
+      </nav>
+      <div className="p-2">{props.itens.filter(i => i.icone === 'configuracoes').map(item)}</div>
+      <details className="perfil-navegacao"><summary className="flex cursor-pointer items-center gap-2"><span className="avatar avatar-pequeno">{iniciais(props.nomeUsuario)}</span><span className="min-w-0 flex-1 truncate text-xs">{props.nomeUsuario}</span><ChevronRight size={13}/></summary><div className="pt-3 text-xs text-slate-300"><p>{props.papelUsuario} · {props.nomeOrganizacao}</p><form action={sair} onSubmit={()=>{try{Object.keys(sessionStorage).filter(k=>k.startsWith('newsec:rascunho:')).forEach(k=>sessionStorage.removeItem(k));}catch{}}}><button className="mt-3 flex items-center gap-2"><LogOut size={14}/>Sair da conta</button></form></div></details>
+    </aside>
+  </>;
 }

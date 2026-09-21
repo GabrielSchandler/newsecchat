@@ -14,7 +14,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { BancoDados, Canal, Contato, Conversa, TipoMensagem } from '@/lib/tipos-banco';
 import { variantesBrasil } from '@/lib/nucleo/telefone';
-import { estadoAoReceberMensagem } from '@/lib/nucleo/estados';
 import { log } from '@/lib/log';
 
 type Cliente = SupabaseClient<BancoDados>;
@@ -119,6 +118,9 @@ export async function resolverConversaAberta(
   if (erroBusca) throw new Error(`Falha ao buscar conversa: ${erroBusca.message}`);
   if (aberta) return aberta;
 
+  const reabertura = await cliente.rpc('reabrir_ao_receber', {p_contato:contato.id,p_canal:canal.id,p_org:canal.organizacao_id});
+  if(reabertura.error)throw new Error('Não foi possível conferir a reabertura: '+reabertura.error.message);
+  if(reabertura.data?.[0])return reabertura.data[0];
   // Canal sem IA nasce direto na fila humana; com IA, nasce com a IA.
   const estadoInicial = canal.ia_ativa ? 'IA' : 'AGUARDANDO_HUMANO';
 
@@ -230,29 +232,11 @@ export async function atualizarConversaAposMensagem(
   previa: string,
   recebidoEm: string,
 ): Promise<Conversa['estado']> {
-  const novoEstado = estadoAoReceberMensagem(conversa.estado);
-
-  const { error } = await cliente
-    .from('conversas')
-    .update({
-      estado: novoEstado,
-      ultima_mensagem_em: recebidoEm,
-      ultima_mensagem_previa: previa.slice(0, 160),
-      nao_lidas: conversa.nao_lidas + 1,
-      versao: conversa.versao + 1,
-    })
-    .eq('id', conversa.id)
-    .eq('organizacao_id', conversa.organizacao_id);
-
-  if (error) throw new Error(`Falha ao atualizar conversa: ${error.message}`);
-
-  await cliente
-    .from('contatos')
-    .update({ ultima_interacao_em: recebidoEm })
-    .eq('id', conversa.contato_id)
-    .eq('organizacao_id', conversa.organizacao_id);
-
-  return novoEstado;
+  const { data, error } = await cliente.rpc('atualizar_conversa_recebida', {
+    p_conversa: conversa.id, p_org: conversa.organizacao_id, p_previa: previa, p_recebido: recebidoEm,
+  });
+  if (error) throw new Error('Falha ao atualizar conversa: ' + error.message);
+  return data;
 }
 
 /** Texto curto que representa a mensagem na lista de conversas. */

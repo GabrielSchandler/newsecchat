@@ -67,7 +67,7 @@ const TONS: Record<Tom, string> = {
   sucesso: 'bg-sucesso-100 text-sucesso-700 border-sucesso-100',
   alerta: 'bg-alerta-100 text-alerta-700 border-alerta-100',
   erro: 'bg-marca-50 text-marca-600 border-marca-50',
-  ia: 'bg-tinta-800 text-bruma-100 border-tinta-700',
+  ia: 'bg-ia-50 text-ia-700 border-ia-50',
   escuro: 'bg-tinta-900 text-white border-tinta-900',
 };
 

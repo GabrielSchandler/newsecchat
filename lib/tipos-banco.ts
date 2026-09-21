@@ -114,6 +114,9 @@ export type Perfil = {
 };
 
 export type MembroOrganizacao = {
+  escopo_conversas: 'PROPRIAS' | 'EQUIPE';
+  pode_assumir: boolean;
+  pode_transferir: boolean;
   id: string;
   organizacao_id: string;
   perfil_id: string;
@@ -310,6 +313,8 @@ export type Mensagem = {
   criado_em: string;
   enviado_em: string | null;
   /** Reserva do despacho em andamento. Vencida ou nula = livre para sair. */
+  despacho_iniciado_em: string | null;
+  despacho_incerto: boolean;
   despacho_reservado_ate: string | null;
   /**
    * Nome de quem assina a mensagem no WhatsApp (a IA ou o atendente que
@@ -663,6 +668,9 @@ type Visao<L> = { Row: L; Relationships: [] };
 export type BancoDados = {
   public: {
     Tables: {
+      regras_atendimento: Tabela<import('./operacao/tipos').RegraAtendimento>;
+      retornos: Tabela<import('./operacao/tipos').Retorno>;
+      respostas_rapidas: Tabela<import('./operacao/tipos').RespostaRapida>;
       organizacoes: Tabela<Organizacao>;
       perfis: Tabela<Perfil>;
       membros_organizacao: Tabela<MembroOrganizacao>;
@@ -697,9 +705,23 @@ export type BancoDados = {
       convites: Tabela<Convite>;
     };
     Views: {
+      contatos_operacionais: Visao<Contato & { conversa_id: string | null; canal_nome: string | null; equipe_nome: string | null; responsavel_nome: string | null; ultimo_autor: string | null; para_responder: boolean | null; retorno_vencido: boolean | null; sugestao_retorno: boolean | null; com_ia: boolean | null; sem_responsavel: boolean | null; retorno_prazo: string | null; etiquetas: Json; conversas_abertas: number; interacao_operacional_em: string | null; ultimo_autor_membro: string | null }>;
+      historico_atendimento: Visao<{ id: string; organizacao_id: string; conversa_id: string; ocorrido_em: string; tipo: string; autor: string; conteudo: string | null; autor_membro_id: string | null }>;
+      fila_operacional: Visao<import('./operacao/tipos').FilaOperacional>;
       integracoes_visiveis: Visao<IntegracaoVisivel>;
     };
     Functions: {
+      reabrir_ao_receber: { Args: { p_contato: string; p_canal: string; p_org: string }; Returns: Conversa[] };
+      salvar_acesso_operacional: { Args: { p_membro: string; p_papel: PapelMembro; p_equipes: string[]; p_escopo: string; p_assumir: boolean; p_transferir: boolean }; Returns: undefined };
+      saude_canais: { Args: Record<string, never>; Returns: Json };
+      resolver_despacho: { Args: { p_mensagem: string; p_entregue: boolean }; Returns: undefined };
+      transferir_com_nota: { Args: { p_conversa: string; p_equipe: string | null; p_membro: string | null; p_ator: string; p_motivo: string | null; p_nota: string | null }; Returns: boolean };
+      iniciar_despacho: { Args: { p_mensagem: string; p_org: string }; Returns: boolean };
+      atualizar_conversa_recebida: { Args: { p_conversa: string; p_org: string; p_previa: string; p_recebido: string }; Returns: Conversa['estado'] };
+
+      relatorio_atendimento: { Args: { p_inicio: string; p_fim: string; p_equipe?: string | null; p_canal?: string | null }; Returns: Json };
+      carga_consultores: { Args: { p_equipe?: string | null; p_canal?: string | null }; Returns: Json };
+      fila_contagens: { Args: { p_busca?: string; p_equipe?: string | null; p_responsavel?: string | null; p_canal?: string | null }; Returns: Json };
       assumir_conversa: {
         Args: { p_conversa_id: string; p_membro_id: string; p_motivo?: string | null };
         Returns: boolean;
@@ -731,6 +753,10 @@ export type BancoDados = {
       };
       encerrar_conversa: {
         Args: { p_conversa_id: string; p_membro_id: string; p_motivo?: string | null };
+        Returns: boolean;
+      };
+      encerrar_conversa_com_versao: {
+        Args: { p_conversa_id: string; p_membro_id: string; p_versao: number; p_motivo?: string | null };
         Returns: boolean;
       };
       reabrir_conversa: {

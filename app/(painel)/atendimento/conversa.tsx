@@ -1,7 +1,8 @@
 'use client';
 
 import * as React from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
+import Link from 'next/link';
 import { toast } from 'sonner';
 import {
   AlertTriangle,
@@ -18,6 +19,10 @@ import {
   Square,
   StickyNote,
   Trash2,
+  MoreVertical,
+  ArrowLeft,
+  UserRound,
+  Sparkles,
   XCircle,
 } from 'lucide-react';
 import { Botao } from '@/componentes/ui/botao';
@@ -29,13 +34,15 @@ import {
   Dialogo,
   RodapeDialogo,
 } from '@/componentes/ui/dialogo';
-import { cn, formatarHora, formatarDataHora } from '@/lib/utilitarios';
+import { cn, iniciais, formatarEspera, formatarHora, formatarDataHora } from '@/lib/utilitarios';
 import { formatarTelefone } from '@/lib/nucleo/telefone';
 import { rotuloEstado } from '@/lib/nucleo/estados';
 import type { Mensagem } from '@/lib/tipos-banco';
 import type { ApoioAtendimento, DetalheConversa } from './tipos';
 import {
   adicionarNota,
+  carregarMensagensAnteriores,
+  conferirEntrega,
   assumirConversa,
   devolverParaIa,
   encerrarConversa,
@@ -47,32 +54,55 @@ import {
   transferirConversa,
 } from './acoes';
 import { useTempoReal } from './tempo-real';
+import { ContextoContato } from './contexto';
+import { interpolarResposta, type FilaOperacional, type RespostaRapida } from '@/lib/operacao/tipos';
 
 export function PainelConversa({
   detalhe,
   apoio,
   meuMembroId,
   organizacaoId,
+  operacional = null,
+  respostas = [],
+  fuso = 'America/Sao_Paulo',
 }: {
   detalhe: DetalheConversa;
   apoio: ApoioAtendimento;
   meuMembroId: string;
   organizacaoId: string;
+  operacional?: FilaOperacional | null;
+  respostas?: RespostaRapida[];
+  fuso?: string;
 }) {
   const roteador = useRouter();
+  const parametros=useSearchParams();const voltar=new URLSearchParams(parametros.toString());voltar.delete('conversa');
   const { conversa, contato } = detalhe;
 
   const [mensagens, definirMensagens] = React.useState<Mensagem[]>(detalhe.mensagens);
   const [texto, definirTexto] = React.useState('');
+  const [notaInterna, definirNotaInterna] = React.useState(false);
+  const [contextoAberto, definirContextoAberto] = React.useState(false);
+  const chaveRascunho = `newsec:rascunho:${organizacaoId}:${meuMembroId}:${conversa.id}:${notaInterna ? "nota" : "mensagem"}`;
+  const conversaAtual = React.useRef(conversa.id);
+  conversaAtual.current = conversa.id;
+  const alterarTexto = (valor: string) => { definirTexto(valor); try { sessionStorage.setItem(chaveRascunho, valor); } catch { /* Rascunho continua na memória se storage indisponível. */ } };
   const [enviando, definirEnviando] = React.useState(false);
   const [ocupado, definirOcupado] = React.useState(false);
   const fim = React.useRef<HTMLDivElement>(null);
+  const rolagem=React.useRef<HTMLDivElement>(null);
+  const [historico,setHistorico]=React.useState<Mensagem[]>([]),[mais,setMais]=React.useState(detalhe.mensagens.length>=120),[carregandoHistorico,setCarregandoHistorico]=React.useState(false);
+  React.useEffect(()=>{fim.current?.scrollIntoView({block:'end'});},[]);
+  const visiveis=[...historico.filter(h=>!mensagens.some(m=>m.id===h.id)),...mensagens].sort((a,b)=>a.criado_em.localeCompare(b.criado_em)||a.id.localeCompare(b.id));
+  async function anteriores(){const primeiro=visiveis[0];if(!primeiro)return;const idAtual=conversa.id;setCarregandoHistorico(true);try{const r=await carregarMensagensAnteriores(idAtual,primeiro.criado_em,primeiro.id);if(conversaAtual.current!==idAtual)return;if(!r.ok){toast.error(r.erro);return;}const altura=rolagem.current?.scrollHeight||0;setHistorico(h=>[...r.mensagens,...h]);setMais(r.mais);requestAnimationFrame(()=>{if(rolagem.current)rolagem.current.scrollTop+=rolagem.current.scrollHeight-altura;});}finally{setCarregandoHistorico(false);}}
+
 
   // Trocou de conversa: recomeça a lista com o que veio do servidor.
   React.useEffect(() => {
     definirMensagens(detalhe.mensagens);
-    definirTexto('');
   }, [detalhe.mensagens, conversa.id]);
+  React.useEffect(() => {
+    try { definirTexto(sessionStorage.getItem(chaveRascunho) || ''); } catch { definirTexto(''); }
+  }, [chaveRascunho]);
 
   const aoChegarMensagem = React.useCallback((nova: Mensagem) => {
     definirMensagens((atuais) => {
@@ -89,7 +119,7 @@ export function PainelConversa({
   const { conectado } = useTempoReal({ organizacaoId, conversaId: conversa.id, aoChegarMensagem });
 
   React.useEffect(() => {
-    fim.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
+    const area=rolagem.current;if(!area||area.scrollHeight-area.scrollTop-area.clientHeight<220)fim.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
   }, [mensagens.length]);
 
   React.useEffect(() => {
@@ -126,6 +156,12 @@ export function PainelConversa({
     if (!conteudo || enviando) return;
 
     definirEnviando(true);
+    if (notaInterna) {
+      try { const r = await adicionarNota({ conversaId: conversa.id, texto: conteudo }); if (!r.ok) { toast.error(r.erro); return; } alterarTexto(''); roteador.refresh(); }
+      catch { toast.error('Não foi possível salvar a nota. Seu texto foi preservado.'); }
+      finally { definirEnviando(false); }
+      return;
+    }
 
     // Otimista: o balão aparece agora. Se o envio falhar, ele sai e o
     // texto volta para a caixa — em vez de sumir sem explicação.
@@ -153,6 +189,8 @@ export function PainelConversa({
       // despacho_e_de_campanha.sql), o que nunca acontece com um balão
       // otimista que só existe no navegador.
       despacho_reservado_ate: null,
+      despacho_iniciado_em: null,
+      despacho_incerto: false,
       // Balão otimista, local: o servidor é quem grava o nome de verdade
       // (`enviarMensagemManual`, com o nome de quem está logado). Este
       // objeto some assim que a linha real chega pelo Realtime.
@@ -162,14 +200,15 @@ export function PainelConversa({
     };
 
     definirMensagens((atuais) => [...atuais, provisoria]);
-    definirTexto('');
+    alterarTexto('');
 
     try {
       const resultado = await enviarMensagemManual({ conversaId: conversa.id, texto: conteudo });
+      if (conversaAtual.current !== conversa.id) return;
 
       if (!resultado.ok) {
         definirMensagens((atuais) => atuais.filter((item) => item.id !== provisoria.id));
-        definirTexto(conteudo);
+        alterarTexto(conteudo);
         toast.error(resultado.erro ?? 'Não foi possível enviar.');
         return;
       }
@@ -178,7 +217,7 @@ export function PainelConversa({
       roteador.refresh();
     } catch {
       definirMensagens((atuais) => atuais.filter((item) => item.id !== provisoria.id));
-      definirTexto(conteudo);
+      if (conversaAtual.current === conversa.id) alterarTexto(conteudo);
       toast.error('Falha de comunicação com o servidor.');
     } finally {
       definirEnviando(false);
@@ -186,10 +225,11 @@ export function PainelConversa({
   }
 
   return (
-    <section className="flex h-full min-w-0 flex-col bg-tela">
+    <section className="flex h-full min-w-0 flex-col bg-white">
       <header className="flex flex-wrap items-center justify-between gap-2 border-b border-bruma-200 bg-white px-4 py-2.5">
-        <div className="min-w-0">
+        <div className="flex min-w-0 items-center gap-2.5"><span className="avatar !bg-[#5794e6]">{iniciais(nome)}</span><div className="min-w-0">
           <div className="flex items-center gap-2">
+            <Link href={"/atendimento?"+voltar} aria-label="Voltar à fila" className="md:hidden"><ArrowLeft size={19}/></Link>
             <h2 className="truncate text-[15px] font-semibold text-tinta-900">{nome}</h2>
             <SeloEstado estado={conversa.estado} />
           </div>
@@ -199,9 +239,10 @@ export function PainelConversa({
             {detalhe.responsavelNome ? ` · ${detalhe.responsavelNome}` : ''}
             {detalhe.campanhaNome ? ` · veio da campanha "${detalhe.campanhaNome}"` : ''}
           </p>
-        </div>
+        </div></div>
 
         <div className="flex flex-wrap items-center gap-1.5">
+          <button className="botao-link min-[1400px]:hidden" onClick={() => definirContextoAberto(true)} aria-label="Abrir contexto do contato"><UserRound size={16}/></button>
           {!conectado ? (
             <span className="mr-1 flex items-center gap-1 text-[11px] text-alerta-700" title="As mensagens novas podem demorar a aparecer.">
               <AlertTriangle className="h-3 w-3" aria-hidden />
@@ -260,7 +301,11 @@ export function PainelConversa({
                 }
               />
 
-              {conversa.estado !== 'IA' && detalhe.canal?.ia_ativa ? (
+              <DialogoEncerrar
+                ocupado={ocupado}
+                aoConfirmar={(motivo) => executar(() => encerrarConversa(conversa.id, motivo, conversa.versao))}
+              />
+              <details className="relative"><summary aria-label="Mais ações do atendimento" className="flex h-8 w-7 cursor-pointer list-none items-center justify-center rounded hover:bg-bruma-100"><MoreVertical size={18}/></summary><div className="absolute right-0 top-10 z-20 min-w-44 rounded border bg-white p-2 shadow-lg">              {conversa.estado !== 'IA' && detalhe.canal?.ia_ativa ? (
                 <Botao
                   variante="fantasma"
                   tamanho="pequeno"
@@ -280,22 +325,34 @@ export function PainelConversa({
                 }
               />
 
-              <DialogoEncerrar
-                ocupado={ocupado}
-                aoConfirmar={(motivo) => executar(() => encerrarConversa(conversa.id, motivo))}
-              />
+</div></details>
+
             </>
           )}
         </div>
       </header>
 
-      <div className="min-h-0 flex-1 overflow-y-auto rolagem-fina px-4 py-4">
+      <div className="space-y-1.5 px-3 pt-2">
+        {mensagens.filter(m=>m.despacho_incerto || m.despacho_iniciado_em&&m.status==='ENFILEIRADA'&&Date.now()-Date.parse(m.despacho_iniciado_em)>120000).map(m=><details key={m.id} className="aviso-operacional !block"><summary>Entrega em confirmação · confira o canal antes de agir</summary><p className="my-2">{m.conteudo||'Mensagem de mídia'}</p><p className="mb-2">Após conferir no WhatsApp, a supervisão pode registrar o resultado.</p><div className="flex flex-wrap gap-2"><button disabled={ocupado} className="botao-link" onClick={()=>void executar(()=>conferirEntrega(m.id,true))}>Conferi: foi enviada</button><button disabled={ocupado} className="botao-link" onClick={()=>void executar(()=>conferirEntrega(m.id,false))}>Conferi: não foi enviada</button></div></details>)}
+
+        {operacional?.para_responder && <div className="aviso-operacional"><Clock size={16}/>{operacional.espera_desde ? `Cliente aguarda ${formatarEspera(operacional.espera_desde)}` : 'Cliente aguarda atendimento humano'}{operacional.resposta_vencida ? ' · prazo vencido' : ''}</div>}
+        {!encerrada && <div className="flex items-center gap-2 rounded border border-ia-50 bg-ia-50 px-3 py-2 text-xs text-ia-700"><Sparkles size={17}/>{conversa.estado === 'HUMANO' ? 'Atendimento humano · IA pausada' : conversa.estado === 'AGUARDANDO_HUMANO' ? 'Aguardando humano · IA pausada' : 'Assistente IA em atendimento'}</div>}
+      </div>
+
+      <div ref={rolagem} className="min-h-0 flex-1 overflow-y-auto rolagem-fina px-4 py-4">
+        {mais&&<button disabled={carregandoHistorico} onClick={()=>void anteriores()} className="mb-4 w-full text-xs text-produto-800">{carregandoHistorico?'Carregando…':'Carregar mensagens anteriores'}</button>}
         <ol className="mx-auto flex max-w-3xl flex-col gap-2">
-          {mensagens.map((mensagem, indice) => (
+          {[
+            ...visiveis.map(m=>({tipo:'mensagem' as const,data:m.criado_em,id:m.id,m})),
+            ...detalhe.eventos.filter(e=>e.criado_em>=(visiveis[0]?.criado_em||'')).map(e=>({tipo:'evento' as const,data:e.criado_em,id:e.id,e})),
+          ].sort((a,b)=>a.data.localeCompare(b.data)||a.id.localeCompare(b.id)).map(item=>item.tipo==='evento' ? <li key={item.id} className="my-2 flex justify-center"><span className="flex max-w-[90%] items-center gap-2 rounded bg-bruma-50 px-3 py-2 text-[11px] text-bruma-600"><UserRound size={14}/>{rotuloEvento(item.e.tipo)}{item.e.motivo?' · '+item.e.motivo:''} · {formatarHora(item.data,fuso)}</span></li> : (
+
             <BalaoMensagem
-              key={mensagem.id}
-              mensagem={mensagem}
-              anterior={mensagens[indice - 1] ?? null}
+              key={item.id}
+              mensagem={item.m}
+              nomeContato={nome}
+              fuso={fuso}
+              anterior={visiveis[visiveis.findIndex(m=>m.id===item.id)-1]??null}
             />
           ))}
         </ol>
@@ -321,7 +378,7 @@ export function PainelConversa({
         <div ref={fim} />
       </div>
 
-      <footer className="border-t border-bruma-200 bg-white px-4 py-3">
+      <footer className="border-t border-bruma-200 bg-white px-3 py-2 pb-[max(8px,env(safe-area-inset-bottom))]">
         {encerrada ? (
           <p className="flex items-center justify-center gap-2 py-2 text-[13px] text-bruma-600">
             <Lock className="h-3.5 w-3.5" aria-hidden />
@@ -331,11 +388,12 @@ export function PainelConversa({
           </p>
         ) : (
           <form onSubmit={aoEnviar} className="mx-auto max-w-3xl">
+            <div className="mb-2 flex flex-wrap items-center gap-2 border-b pb-1"><div role="tablist" aria-label="Tipo de conteúdo" className="abas-operacionais !border-0"><button type="button" role="tab" disabled={enviando} aria-selected={!notaInterna} onClick={() => definirNotaInterna(false)}>Mensagem</button><button type="button" role="tab" disabled={enviando} aria-selected={notaInterna} onClick={() => definirNotaInterna(true)}>Nota interna</button></div><label className="ml-auto flex items-center gap-2 text-[10px] text-bruma-600">Respostas rápidas<select aria-label="Inserir resposta rápida" className="h-7 max-w-[150px] rounded border bg-white px-1 text-[11px]" value="" onChange={e => { const r=respostas.find(i=>i.id===e.target.value); if(!r)return; const v=interpolarResposta(r.conteudo,contato); if(v.ausentes.length){toast.error('Preencha as variáveis: '+v.ausentes.join(', '));return;} alterarTexto(texto ? texto+'\n'+v.texto : v.texto); }}><option value="">Inserir modelo</option>{respostas.map(r=><option key={r.id} value={r.id}>{r.nome}</option>)}</select></label></div>
+            {notaInterna && <p className="mb-2 rounded bg-alerta-100 p-2 text-xs text-alerta-700">Visível apenas para a equipe. Não será enviada ao cliente.</p>}
             {comOutro ? (
               <p className="mb-2 flex items-center gap-1.5 rounded-lg bg-alerta-100/50 px-2.5 py-1.5 text-[12.5px] text-alerta-700">
                 <AlertTriangle className="h-3.5 w-3.5 shrink-0" aria-hidden />
-                Esta conversa está com {detalhe.responsavelNome ?? 'outro atendente'}. Ao enviar, você
-                assume o atendimento.
+                Esta conversa está com {detalhe.responsavelNome ?? 'outro atendente'}. Peça a transferência antes de responder.
               </p>
             ) : null}
 
@@ -348,8 +406,9 @@ export function PainelConversa({
 
             <div className="flex items-end gap-2">
               <AreaTexto
+                disabled={enviando || (comOutro && !notaInterna)}
                 value={texto}
-                onChange={(evento) => definirTexto(evento.target.value)}
+                onChange={(evento) => alterarTexto(evento.target.value)}
                 onKeyDown={(evento) => {
                   // Enter envia; Shift+Enter quebra linha — como no WhatsApp.
                   if (evento.key === 'Enter' && !evento.shiftKey) {
@@ -357,21 +416,21 @@ export function PainelConversa({
                     void aoEnviar(evento);
                   }
                 }}
-                placeholder="Escreva a resposta…"
+                placeholder={notaInterna ? 'Adicione uma nota para a equipe…' : `Escreva para ${nome}…`}
                 aria-label="Mensagem"
                 rows={2}
                 maxLength={4000}
                 className="min-h-[44px] resize-none"
               />
-              {texto.trim() ? (
+              {texto.trim() || notaInterna ? (
                 <Botao type="submit" carregando={enviando} className="h-[44px]">
                   <Send className="h-4 w-4" aria-hidden />
-                  Enviar
+                  {notaInterna ? 'Salvar nota' : 'Enviar'}
                 </Botao>
               ) : (
                 <GravadorAudio
                   conversaId={conversa.id}
-                  desabilitado={ocupado}
+                  desabilitado={ocupado||comOutro}
                   aoEnviar={(formData) => executar(() => enviarAudioManual(formData))}
                 />
               )}
@@ -386,10 +445,12 @@ export function PainelConversa({
           </form>
         )}
       </footer>
+      <Dialogo open={contextoAberto} onOpenChange={definirContextoAberto}><ConteudoDialogo titulo="Contexto do contato" descricao={nome}><ContextoContato detalhe={detalhe} apoio={apoio} operacional={operacional} membroId={meuMembroId} fuso={fuso}/></ConteudoDialogo></Dialogo>
     </section>
   );
 }
 
+function rotuloEvento(tipo:string){const nomes:Record<string,string>={CRIADA:'Conversa iniciada',ASSUMIU:'Atendimento assumido',TRANSFERIDA:'Atendimento transferido',ENCERRADA:'Conversa concluída',REABERTA:'Conversa reaberta',DEVOLVIDA_IA:'IA retomada',RETORNO_AGENDADO:'Retorno agendado',RETORNO_ATUALIZADO:'Retorno atualizado'};return nomes[tipo]||'Atendimento atualizado';}
 function SeloEstado({ estado }: { estado: DetalheConversa['conversa']['estado'] }) {
   const tons = {
     IA: 'ia',
@@ -402,7 +463,7 @@ function SeloEstado({ estado }: { estado: DetalheConversa['conversa']['estado'] 
   return <Selo tom={tons[estado]}>{rotuloEstado[estado]}</Selo>;
 }
 
-function BalaoMensagem({ mensagem, anterior }: { mensagem: Mensagem; anterior: Mensagem | null }) {
+function BalaoMensagem({ mensagem, anterior,nomeContato,fuso }: { mensagem: Mensagem; anterior: Mensagem | null;nomeContato:string;fuso:string }) {
   const daEmpresa = mensagem.direcao === 'SAIDA';
   const daIa = mensagem.autor === 'IA';
 
@@ -427,16 +488,17 @@ function BalaoMensagem({ mensagem, anterior }: { mensagem: Mensagem; anterior: M
               day: '2-digit',
               month: 'long',
               year: 'numeric',
-              timeZone: 'America/Sao_Paulo',
+              timeZone: fuso,
             }).format(new Date(mensagem.criado_em))}
           </span>
         </li>
       ) : null}
 
-      <li className={cn('flex', daEmpresa ? 'justify-end' : 'justify-start')}>
-        <div
+      <li className={cn('flex items-start gap-2 py-2', daEmpresa ? 'justify-end' : 'justify-start')}>
+        {!daEmpresa&&<span className="avatar avatar-pequeno !bg-[#5794e6]">{iniciais(nomeContato)}</span>}
+        <div className="max-w-[85%]"><p className={cn('mb-1 text-[10px] text-bruma-600',daEmpresa&&'text-right')}>{daEmpresa?(mensagem.remetente_nome|| (daIa?'Assistente IA':'Consultor')):nomeContato} · {formatarHora(mensagem.criado_em,fuso)}</p><div
           className={cn(
-            'balao',
+            'balao !max-w-full',
             !daEmpresa && 'balao-entrada',
             daEmpresa && daIa && 'balao-saida-ia',
             daEmpresa && !daIa && 'balao-saida-humano',
@@ -475,16 +537,16 @@ function BalaoMensagem({ mensagem, anterior }: { mensagem: Mensagem; anterior: M
               daEmpresa ? 'opacity-70' : 'text-bruma-500',
             )}
           >
-            {formatarHora(mensagem.criado_em)}
+            {formatarHora(mensagem.criado_em,fuso)}
             {daEmpresa ? <IconeStatus status={mensagem.status} /> : null}
           </span>
 
           {mensagem.status === 'FALHOU' && mensagem.erro ? (
-            <span className="mt-1 block text-[11px] font-medium text-marca-300">
+            <span className="mt-1 block text-[11px] font-medium text-marca-600">
               Falha no envio: {mensagem.erro}
             </span>
           ) : null}
-        </div>
+        </div></div>{daIa&&<span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-ia-500 text-white"><Sparkles size={17}/></span>}
       </li>
     </>
   );
@@ -887,8 +949,8 @@ function DialogoEncerrar({
       </Botao>
 
       <ConteudoDialogo
-        titulo="Encerrar atendimento"
-        descricao="A conversa sai das caixas abertas. Se o cliente escrever de novo, uma conversa nova é aberta — o histórico dele continua inteiro na ficha."
+        titulo="Concluir atendimento"
+        descricao="A conversa sai da fila aberta e mantém seu histórico. Novas mensagens seguem a regra de reabertura da operação."
       >
         <CorpoDialogo>
           <Campo rotulo="Como terminou?" htmlFor="encerrar-motivo">

@@ -1,16 +1,16 @@
 import type { Metadata } from 'next';
-import Link from 'next/link';
+import { PerfilContato } from '@/componentes/operacao/perfil-contato';
 import { notFound } from 'next/navigation';
-import { ArrowLeft } from 'lucide-react';
+
 import { exigirSessao } from '@/lib/sessao';
 import { clienteServidor } from '@/lib/supabase/servidor';
-import { formatarTelefone } from '@/lib/nucleo/telefone';
+
 import { FichaCompleta } from './ficha';
 
 export const metadata: Metadata = { title: 'Contato' };
 export const dynamic = 'force-dynamic';
 
-export default async function PaginaContato({ params }: { params: Promise<{ id: string }> }) {
+export default async function PaginaContato({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<Record<string,string|undefined>> }) {
   const { id } = await params;
   const sessao = await exigirSessao();
   const supabase = await clienteServidor();
@@ -86,24 +86,8 @@ export default async function PaginaContato({ params }: { params: Promise<{ id: 
   const porPerfil = new Map((perfis ?? []).map((perfil) => [perfil.id, perfil.nome || perfil.email]));
   const valores = new Map((valoresResposta.data ?? []).map((item) => [item.campo_id, item.valor]));
 
-  return (
-    <div className="mx-auto max-w-5xl px-6 py-8 lg:px-10">
-      <Link
-        href="/contatos"
-        className="mb-4 inline-flex items-center gap-1.5 text-[13px] font-medium text-bruma-600 transition-colors hover:text-tinta-900"
-      >
-        <ArrowLeft className="h-3.5 w-3.5" aria-hidden />
-        Todos os contatos
-      </Link>
-
-      <h1 className="text-[22px] font-semibold tracking-tight text-tinta-950">
-        {contato.nome || contato.nome_perfil_whatsapp || formatarTelefone(contato.telefone)}
-      </h1>
-      <p className="mt-1 text-[13.5px] tabular-nums text-bruma-600">
-        {formatarTelefone(contato.telefone)}
-      </p>
-
-      <FichaCompleta
+  return <PerfilContato contato={contato} conversas={conversasResposta.data ?? []} membroId={sessao.membro.id} fuso={sessao.organizacao.fuso_horario} parametros={await searchParams}>
+<FichaCompleta
         contato={contato}
         campos={(camposResposta.data ?? []).map((campo) => ({
           campo,
@@ -118,6 +102,5 @@ export default async function PaginaContato({ params }: { params: Promise<{ id: 
           .map((membro) => ({ id: membro.id, nome: porPerfil.get(membro.perfil_id) ?? 'Atendente' }))
           .sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'))}
       />
-    </div>
-  );
+</PerfilContato>;
 }

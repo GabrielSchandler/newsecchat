@@ -78,18 +78,80 @@
   }
 
   .balao-entrada {
-    @apply bg-white text-tinta-900 shadow-[0_1px_2px_rgba(11,11,13,0.06)];
+    @apply bg-bruma-100 text-tinta-900;
   }
 
   .balao-saida-humano {
-    @apply bg-produto-700 text-white;
+    @apply bg-produto-50 text-tinta-900;
   }
 
   .balao-saida-ia {
-    @apply bg-tinta-800 text-bruma-100;
+    @apply bg-ia-50 text-ia-700;
   }
 
   .balao-sistema {
     @apply mx-auto max-w-[80%] bg-bruma-200 text-center text-xs text-tinta-700;
+  }
+}
+
+@layer components {
+  .estrutura-aplicacao { @apply flex h-dvh min-h-0 overflow-hidden; }
+  .area-aplicacao { @apply flex min-w-0 flex-1 flex-col; }
+  .conteudo-aplicacao { @apply min-h-0 flex-1 overflow-y-auto; }
+  .cabecalho-aplicacao { @apply flex h-[54px] shrink-0 items-center justify-between gap-3 border-b bg-white px-5 text-sm; }
+  .barra-navegacao { @apply z-50 flex w-[184px] shrink-0 flex-col bg-tinta-850 text-white; }
+  .marca-aplicacao { @apply flex items-center justify-between px-5 pb-7 pt-5; }
+  .marca-aplicacao strong { @apply block text-[30px] font-bold leading-none tracking-[-1.5px]; }
+  .marca-aplicacao span { @apply mt-1 block text-[12px] font-semibold tracking-[1px] text-[#86ABBF]; }
+  .navegacao-principal { @apply min-h-0 flex-1 overflow-y-auto px-2; }
+  .item-menu { @apply mb-1 flex min-h-10 items-center gap-3 rounded-md border-l-[3px] border-transparent px-2.5 py-2 text-[12px] transition-colors hover:bg-white/10; }
+  .item-menu-ativo { @apply border-[#00CCF2] bg-[#07607E] font-semibold hover:bg-[#07607E]; }
+  .perfil-navegacao { @apply border-t border-white/10 px-3 py-4; }
+  .avatar { @apply inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#6F869C] text-sm font-semibold text-white; }
+  .avatar-pequeno { @apply h-8 w-8 text-[11px]; }
+  .avatar-grande { @apply h-16 w-16 text-2xl; }
+  .abrir-menu { @apply fixed left-3 top-3 z-30 flex h-8 w-8 items-center justify-center rounded border bg-white lg:hidden; }
+  .cobertura-menu { @apply fixed inset-0 z-40 bg-tinta-950/40; }
+  .pagina-operacional { @apply mx-auto w-full max-w-[1600px] p-4 lg:p-5; }
+  .superficie { @apply rounded-lg border bg-white p-4; }
+  .titulo-painel { @apply mb-3 text-[15px] font-semibold tracking-tight text-tinta-950; }
+  .tabela-container { @apply min-w-0 overflow-x-auto rounded-md border; }
+  .tabela-operacional { @apply w-full border-collapse text-left text-[12px]; }
+  .tabela-operacional th { @apply whitespace-nowrap border-b bg-bruma-50 px-3 py-3 font-medium text-tinta-700; }
+  .tabela-operacional td { @apply border-b border-bruma-100 px-3 py-3 align-middle; }
+  .tabela-operacional tbody tr:last-child td { @apply border-b-0; }
+  .tabela-operacional tbody tr { @apply transition-colors hover:bg-produto-50/50; }
+  .linha-selecionada { @apply bg-produto-50; }
+  .botao-link { @apply inline-flex min-h-8 items-center justify-center gap-2 rounded border border-produto-500 bg-white px-3 text-xs font-medium text-produto-800 hover:bg-produto-50; }
+  .botao-primario { @apply inline-flex min-h-9 items-center justify-center gap-2 rounded bg-produto-700 px-4 text-[13px] font-medium text-white hover:bg-produto-800; }
+  .aviso-operacional { @apply flex items-center gap-2 rounded border border-[#F9CB83] bg-alerta-100/60 px-3 py-2.5 text-[12px] text-alerta-700; }
+  .campo-operacional { @apply h-9 w-full rounded border bg-white px-3 text-[13px] placeholder:text-bruma-500; }
+  .abas-operacionais { @apply flex gap-1 overflow-x-auto border-b; }
+  .abas-operacionais a, .abas-operacionais button { @apply whitespace-nowrap border-b-2 border-transparent px-4 py-3 text-[12px] text-tinta-700; }
+  .abas-operacionais [aria-current=page], .abas-operacionais [aria-selected=true] { @apply border-produto-500 font-semibold text-produto-800; }
+  .central-atendimento { @apply flex h-full min-h-0 overflow-hidden bg-white; }
+  .lista-atendimento { @apply flex h-full w-[300px] shrink-0 flex-col border-r; }
+  .conversa-atendimento { @apply min-w-0 flex-1; }
+  .contexto-atendimento { @apply hidden h-full w-[270px] shrink-0 overflow-y-auto border-l bg-white min-[1400px]:block; }
+  .filtro-fila { @apply inline-flex items-center justify-center gap-1.5 rounded border bg-bruma-50 px-2 py-1.5 text-[11px] font-medium; }
+  .filtro-fila[aria-current=true] { @apply border-produto-700 bg-produto-700 text-white; }
+  .item-conversa { @apply mx-1.5 flex gap-2.5 rounded-md border border-transparent px-2.5 py-3 hover:bg-bruma-50; }
+  .item-conversa[aria-current=true] { @apply border-produto-500 bg-produto-50; }
+  .metricas-operacionais { @apply grid grid-cols-2 gap-3 xl:grid-cols-4; }
+  .metrica { @apply flex min-h-[83px] items-center gap-3 rounded-lg border bg-white p-3; }
+  .metrica-icone { @apply flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-produto-50 text-produto-700; }
+  .painel-dividido { @apply grid min-w-0 gap-3 lg:grid-cols-[minmax(0,1fr)_300px]; }
+  @media (max-width:1023px) {
+    .barra-navegacao { @apply fixed inset-y-0 left-0 -translate-x-full transition-transform; }
+    .navegacao-aberta { @apply translate-x-0; }
+    .cabecalho-aplicacao { @apply pl-14; }
+  }
+  @media (max-width:767px) {
+    .central-atendimento[data-aberta=true] .lista-atendimento { display:none; }
+    .central-atendimento[data-aberta=false] .conversa-atendimento { display:none; }
+    .lista-atendimento { @apply w-full; }
+    .balao { max-width:90%; }
+    .pagina-operacional { @apply p-3; }
+    .tabela-operacional { min-width:580px; }
   }
 }

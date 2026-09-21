@@ -15,9 +15,11 @@ import { alternarEtiqueta } from './acoes';
 export function FichaContato({
   detalhe,
   apoio,
+  embutida = false,
 }: {
   detalhe: DetalheConversa;
   apoio: ApoioAtendimento;
+  embutida?: boolean;
 }) {
   const roteador = useRouter();
   const { contato, conversa } = detalhe;
@@ -41,7 +43,7 @@ export function FichaContato({
   }
 
   return (
-    <aside className="hidden h-full w-[300px] shrink-0 overflow-y-auto rolagem-fina border-l border-bruma-200 bg-white xl:block">
+    <aside className={embutida ? 'mt-3 bg-white' : 'contexto-atendimento'}>
       <div className="border-b border-bruma-200 px-4 py-4">
         <p className="text-[15px] font-semibold text-tinta-900">
           {contato.nome || contato.nome_perfil_whatsapp || 'Sem nome'}

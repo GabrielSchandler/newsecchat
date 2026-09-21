@@ -1,0 +1,2 @@
+'use client';
+export default function ErroOperacao({reset}:{reset:()=>void}){return <div className="flex h-full items-center justify-center p-6"><section className="superficie max-w-md text-center"><h1 className="text-lg font-semibold">Não foi possível carregar esta tela</h1><p className="my-4 text-sm text-bruma-600">Confira a conexão e tente novamente. Seus rascunhos de atendimento continuam preservados neste navegador.</p><button className="botao-primario" onClick={reset}>Tentar novamente</button></section></div>;}

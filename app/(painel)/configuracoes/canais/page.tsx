@@ -28,6 +28,12 @@ export default async function PaginaCanais() {
       .order('ordem'),
   ]);
 
+  if(canaisResposta.error||departamentosResposta.error)throw new Error('Não foi possível carregar os canais.');
+  const [saude, falhas] = await Promise.all([
+    supabase.rpc('saude_canais', {}),
+    supabase.from('mensagens').select('id,canal_id,conversa_id,erro,criado_em').eq('organizacao_id',sessao.organizacao.id).or('status.eq.FALHOU,despacho_incerto.eq.true').order('criado_em',{ascending:false}).limit(60),
+  ]);
+  if(saude.error||falhas.error)throw new Error('Não foi possível carregar a saúde dos canais.');
   const evolutionPronta = integracaoConfigurada('EVOLUTION');
 
   return (
@@ -48,6 +54,8 @@ export default async function PaginaCanais() {
 
       <PainelCanais
         canais={canaisResposta.data ?? []}
+        saude={saude.data as unknown as {id:string;falhas:number;ultimo_evento:string|null}[]}
+        falhas={falhas.data||[]}
         departamentos={departamentosResposta.data ?? []}
         evolutionPronta={evolutionPronta}
       />

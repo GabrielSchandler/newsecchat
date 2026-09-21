@@ -233,7 +233,9 @@ export async function executarTurnoIa(
   // 4. Resposta gravada sob a trava do banco.
   let mensagemId: string | null = null;
 
-  if (texto) {
+  // A transferência deve pausar a IA antes de existir outro envio na fila.
+  // O contexto aprendido fica disponível para a primeira resposta humana.
+  if (texto && !precisaHumano) {
     const { data, error: erroRpc } = await cliente.rpc('registrar_mensagem_ia', {
       p_conversa_id: conversaId,
       p_conteudo: texto,

@@ -1,167 +1,23 @@
-import type { Metadata } from 'next';
 import Link from 'next/link';
-import { Users } from 'lucide-react';
+import { Search,ChevronRight,Info } from 'lucide-react';
 import { exigirSessao } from '@/lib/sessao';
 import { clienteServidor } from '@/lib/supabase/servidor';
-import { CabecalhoPagina, Cartao, EstadoVazio, Selo } from '@/componentes/ui/estrutura';
-import { formatarTelefone, normalizarTelefone } from '@/lib/nucleo/telefone';
-import { iniciais, tempoRelativo } from '@/lib/utilitarios';
-import { BuscaContatos } from './busca';
-
-export const metadata: Metadata = { title: 'Contatos' };
-export const dynamic = 'force-dynamic';
-
-const POR_PAGINA = 40;
-
-export default async function PaginaContatos({
-  searchParams,
-}: {
-  searchParams: Promise<Record<string, string | string[] | undefined>>;
-}) {
-  const sessao = await exigirSessao();
-  const parametros = await searchParams;
-
-  const ler = (chave: string) => {
-    const valor = parametros[chave];
-    return Array.isArray(valor) ? valor[0] : valor;
-  };
-
-  const busca = (ler('busca') ?? '').trim();
-  const etiquetaId = ler('etiqueta') ?? '';
-  const pagina = Math.max(1, Number(ler('pagina') ?? 1) || 1);
-
-  const supabase = await clienteServidor();
-
-  const [etiquetasResposta] = await Promise.all([
-    supabase.from('etiquetas').select('*').eq('organizacao_id', sessao.organizacao.id).order('nome'),
-  ]);
-
-  // O filtro por etiqueta vira uma lista de ids antes da consulta
-  // principal — mais simples e mais previsível que um join aninhado.
-  let idsPorEtiqueta: string[] | null = null;
-  if (etiquetaId) {
-    const { data } = await supabase
-      .from('etiquetas_contato')
-      .select('contato_id')
-      .eq('organizacao_id', sessao.organizacao.id)
-      .eq('etiqueta_id', etiquetaId)
-      .limit(1000);
-
-    idsPorEtiqueta = (data ?? []).map((linha) => linha.contato_id);
-    if (idsPorEtiqueta.length === 0) idsPorEtiqueta = ['00000000-0000-0000-0000-000000000000'];
-  }
-
-  let consulta = supabase
-    .from('contatos')
-    .select('*', { count: 'exact' })
-    .eq('organizacao_id', sessao.organizacao.id)
-    .order('ultima_interacao_em', { ascending: false, nullsFirst: false })
-    .range((pagina - 1) * POR_PAGINA, pagina * POR_PAGINA - 1);
-
-  if (idsPorEtiqueta) consulta = consulta.in('id', idsPorEtiqueta);
-
-  if (busca) {
-    const digitos = normalizarTelefone(busca) ?? busca.replace(/\D/g, '');
-    consulta =
-      digitos.length >= 3
-        ? consulta.or(`nome.ilike.%${busca}%,telefone.ilike.%${digitos}%`)
-        : consulta.ilike('nome', `%${busca}%`);
-  }
-
-  const { data: contatos, count } = await consulta;
-  const total = count ?? 0;
-  const ultimaPagina = Math.max(1, Math.ceil(total / POR_PAGINA));
-
-  return (
-    <div className="mx-auto max-w-6xl px-6 py-8 lg:px-10">
-      <CabecalhoPagina
-        titulo="Contatos"
-        descricao={`${total} contato(s) na base de ${sessao.organizacao.nome}.`}
-      />
-
-      <BuscaContatos
-        buscaAtual={busca}
-        etiquetaAtual={etiquetaId}
-        etiquetas={etiquetasResposta.data ?? []}
-      />
-
-      {!contatos?.length ? (
-        <Cartao className="mt-4">
-          <EstadoVazio
-            icone={<Users className="h-5 w-5" />}
-            titulo={busca || etiquetaId ? 'Nenhum contato encontrado' : 'Nenhum contato ainda'}
-            descricao={
-              busca || etiquetaId
-                ? 'Tente outro termo, ou limpe os filtros.'
-                : 'Os contatos aparecem sozinhos quando alguém envia mensagem para um número conectado, ou quando você importa uma planilha.'
-            }
-          />
-        </Cartao>
-      ) : (
-        <>
-          <Cartao className="mt-4 overflow-hidden">
-            <ul className="divide-y divide-bruma-100">
-              {contatos.map((contato) => (
-                <li key={contato.id}>
-                  <Link
-                    href={`/contatos/${contato.id}`}
-                    className="flex items-center gap-3 px-4 py-3 transition-colors hover:bg-bruma-50"
-                  >
-                    <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-bruma-100 text-[12px] font-semibold text-tinta-700">
-                      {iniciais(contato.nome ?? contato.nome_perfil_whatsapp ?? '?')}
-                    </span>
-
-                    <span className="min-w-0 flex-1">
-                      <span className="flex flex-wrap items-center gap-2">
-                        <span className="truncate text-[14px] font-medium text-tinta-900">
-                          {contato.nome || contato.nome_perfil_whatsapp || 'Sem nome'}
-                        </span>
-                        {contato.eh_cliente ? <Selo tom="produto">cliente</Selo> : null}
-                        {!contato.aceita_campanha ? <Selo tom="alerta">sem campanha</Selo> : null}
-                        {contato.bloqueado ? <Selo tom="erro">bloqueado</Selo> : null}
-                      </span>
-                      <span className="mt-0.5 block truncate text-[12.5px] tabular-nums text-bruma-600">
-                        {formatarTelefone(contato.telefone)}
-                        {contato.origem ? ` · ${contato.origem}` : ''}
-                      </span>
-                    </span>
-
-                    <span className="shrink-0 text-[12px] text-bruma-500">
-                      {contato.ultima_interacao_em
-                        ? tempoRelativo(contato.ultima_interacao_em)
-                        : 'sem interação'}
-                    </span>
-                  </Link>
-                </li>
-              ))}
-            </ul>
-          </Cartao>
-
-          <div className="mt-3 flex items-center justify-between text-[13px] text-bruma-600">
-            <span>
-              Página {pagina} de {ultimaPagina}
-            </span>
-            <div className="flex gap-2">
-              {pagina > 1 ? (
-                <Link
-                  href={`/contatos?pagina=${pagina - 1}${busca ? `&busca=${encodeURIComponent(busca)}` : ''}${etiquetaId ? `&etiqueta=${etiquetaId}` : ''}`}
-                  className="rounded-lg border border-bruma-300 bg-white px-3 py-1.5 font-medium text-tinta-800 hover:bg-bruma-50"
-                >
-                  Anterior
-                </Link>
-              ) : null}
-              {pagina < ultimaPagina ? (
-                <Link
-                  href={`/contatos?pagina=${pagina + 1}${busca ? `&busca=${encodeURIComponent(busca)}` : ''}${etiquetaId ? `&etiqueta=${etiquetaId}` : ''}`}
-                  className="rounded-lg border border-bruma-300 bg-white px-3 py-1.5 font-medium text-tinta-800 hover:bg-bruma-50"
-                >
-                  Próxima
-                </Link>
-              ) : null}
-            </div>
-          </div>
-        </>
-      )}
-    </div>
-  );
+import { CabecalhoPagina,Selo } from '@/componentes/ui/estrutura';
+import { Identidade } from '@/componentes/operacao/compartilhados';
+import { NovoContato } from '@/componentes/operacao/novo-contato';
+import { carregarApoio } from '../atendimento/dados';
+import { tempoRelativo } from '@/lib/utilitarios';
+export const dynamic='force-dynamic';
+export default async function Contatos({searchParams}:{searchParams:Promise<Record<string,string|undefined>>}){
+ const s=await exigirSessao(),p=await searchParams,db=await clienteServidor(),pagina=Math.max(1,Number(p.pagina)||1);
+ const apoio=await carregarApoio(s.organizacao.id);let q=db.from('contatos_operacionais').select('*',{count:'exact'}).eq('organizacao_id',s.organizacao.id);
+ if(p.busca){const termo=p.busca.replace(/[,%()"\\]/g,'');const digitos=termo.replace(/\D/g,'');q=digitos.length>=3?q.or(`nome.ilike.%${termo}%,telefone.ilike.%${digitos}%`):q.ilike('nome','%'+termo+'%');}
+ if(p.escopo==='meus')q=q.eq('responsavel_id',s.membro.id);
+ if(p.responsavel)q=q.eq('responsavel_id',p.responsavel);
+ if(p.ultimo)q=q.eq('ultimo_autor',p.ultimo);
+ if(p.escopo==='sem-resposta')q=q.eq('ultimo_autor','ATENDENTE').eq('ultimo_autor_membro',s.membro.id).eq('para_responder',false);
+ if(p.etiqueta)q=q.contains('etiquetas',[{id:p.etiqueta}]);
+ const {data,count,error}=await q.order('interacao_operacional_em',{ascending:false,nullsFirst:false}).order('id').range((pagina-1)*40,pagina*40-1);if(error)throw new Error('Não foi possível carregar os contatos.');
+ function url(m:Record<string,string>){const n=new URLSearchParams(Object.entries(p).filter((e):e is [string,string]=>!!e[1]));for(const [k,v]of Object.entries(m)){if(v)n.set(k,v);else n.delete(k);}return '/contatos?'+n;}
+ return <div className="pagina-operacional"><CabecalhoPagina titulo="Contatos" descricao={(count||0)+' contatos'} acoes={<NovoContato/>}/><form className="mb-3 space-y-3"><div className="relative"><Search size={17} className="absolute left-3 top-3 text-bruma-600"/><input type="search" name="busca" aria-label="Buscar contato por nome ou telefone" defaultValue={p.busca} className="campo-operacional !pl-10" placeholder="Buscar nome ou telefone"/></div><div className="flex flex-wrap gap-2"><select name="responsavel" aria-label="Responsável" defaultValue={p.responsavel||''} className="campo-operacional !w-auto"><option value="">Responsável</option>{apoio.atendentes.map(a=><option key={a.membroId} value={a.membroId}>{a.nome}</option>)}</select><select name="etiqueta" aria-label="Etiqueta" defaultValue={p.etiqueta||''} className="campo-operacional !w-auto"><option value="">Etiquetas</option>{apoio.etiquetas.map(e=><option key={e.id} value={e.id}>{e.nome}</option>)}</select><select name="ultimo" aria-label="Último remetente" defaultValue={p.ultimo||''} className="campo-operacional !w-auto"><option value="">Último remetente</option><option value="CONTATO">Cliente</option><option value="ATENDENTE">Consultor</option><option value="IA">Assistente IA</option></select><input type="hidden" name="escopo" value={p.escopo||''}/><button className="botao-link">Aplicar filtros</button></div></form><nav className="mb-3 flex flex-wrap gap-2">{([['','Todos'],['meus','Meus contatos'],['sem-resposta','Sem resposta ao meu envio']] as const).map(([v,n])=><Link key={v} href={url({escopo:v,pagina:''})} className={(p.escopo||'')===v?'rounded-full bg-produto-700 px-4 py-1.5 text-xs text-white':'rounded-full border bg-white px-4 py-1.5 text-xs'}>{n}</Link>)}</nav><div className="tabela-container bg-white"><table className="tabela-operacional"><thead><tr><th>Contato</th><th>Etiquetas</th><th>Responsável</th><th>Última interação</th><th>Próxima ação</th><th><span className="sr-only">Abrir perfil</span></th></tr></thead><tbody>{data?.map(i=>{const tags=Array.isArray(i.etiquetas)?i.etiquetas as {id:string;nome:string}[]:[];return <tr key={i.id}><td><Link href={'/contatos/'+i.id}><Identidade nome={i.nome||i.nome_perfil_whatsapp||'Sem nome'} telefone={i.telefone} pequeno/></Link></td><td><div className="flex flex-wrap gap-1">{tags.map(t=><Selo key={t.id} tom="produto">{t.nome}</Selo>)}</div></td><td>{i.responsavel_nome||'Sem responsável'}</td><td>{i.ultimo_autor==='CONTATO'?'Cliente':i.ultimo_autor==='IA'?'IA':i.responsavel_nome||'—'} · {tempoRelativo(i.interacao_operacional_em)||'Sem interação'}</td><td><Link href={i.conversas_abertas===1&&i.conversa_id?'/atendimento?conversa='+i.conversa_id:'/contatos/'+i.id}><Selo tom={i.retorno_vencido?'erro':i.para_responder?'alerta':i.com_ia?'ia':'produto'}>{i.conversas_abertas>1?'Ver atendimentos':i.retorno_vencido?'Retorno vencido':i.para_responder?'Responder':i.sem_responsavel?'Atribuir':i.com_ia?'Com IA':i.sugestao_retorno?'Sugerir retorno':i.retorno_prazo?'Retorno agendado':i.conversa_id?'Abrir conversa':'Ver contato'}</Selo></Link></td><td><Link href={'/contatos/'+i.id} aria-label={'Ver perfil de '+i.nome}><ChevronRight size={17}/></Link></td></tr>;})}</tbody></table>{!data?.length&&<p className="p-12 text-center text-sm text-bruma-600">Nenhum contato para estes filtros.</p>}</div><div className="mt-4 flex flex-wrap items-center justify-between gap-3 text-xs text-bruma-600"><p className="flex items-center gap-2"><Info size={16}/>As etiquetas organizam contexto; a próxima ação vem da conversa.</p><div className="flex items-center gap-3"><span>Página {pagina} · {count||0} contatos</span>{pagina>1&&<Link className="botao-link" href={url({pagina:String(pagina-1)})}>Anterior</Link>}{pagina*40<(count||0)&&<Link className="botao-link" href={url({pagina:String(pagina+1)})}>Próxima</Link>}</div></div></div>;
 }

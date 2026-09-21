@@ -2,6 +2,8 @@
 
 import * as React from 'react';
 import Image from 'next/image';
+import Link from 'next/link';
+import { Identidade } from '@/componentes/operacao/compartilhados';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import {
@@ -53,26 +55,32 @@ export function PainelCanais({
   canais,
   departamentos,
   evolutionPronta,
+  saude = [],
+  falhas = [],
 }: {
   canais: CanalSemSegredo[];
   departamentos: Departamento[];
   evolutionPronta: boolean;
+  saude?: {id:string;falhas:number;ultimo_evento:string|null}[];
+  falhas?: {id:string;canal_id:string;conversa_id:string;erro:string|null;criado_em:string}[];
 }) {
   const roteador = useRouter();
   const [criando, definirCriando] = React.useState(false);
+  const [selecionado,setSelecionado]=React.useState(canais.find(c=>c.status!=='CONECTADO')?.id||canais[0]?.id);
+  const atual=canais.find(c=>c.id===selecionado)||canais[0];
 
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h2 className="text-[16px] font-semibold text-tinta-900">Números de WhatsApp</h2>
+          <h2 className="text-[16px] font-semibold text-tinta-900">Canais</h2>
           <p className="mt-0.5 text-[13px] text-bruma-600">
-            Cada número é um canal. Você pode ter quantos precisar — um por departamento, ou um de reserva.
+            Identifique falhas antes de perder uma conversa.
           </p>
         </div>
         <Botao onClick={() => definirCriando(true)}>
           <Plus className="h-4 w-4" aria-hidden />
-          Novo canal
+          Adicionar canal
         </Botao>
       </div>
 
@@ -86,16 +94,8 @@ export function PainelCanais({
           />
         </Cartao>
       ) : (
-        <div className="space-y-3">
-          {canais.map((canal) => (
-            <LinhaCanal
-              key={canal.id}
-              canal={canal}
-              departamentos={departamentos}
-              aoMudar={() => roteador.refresh()}
-            />
-          ))}
-        </div>
+        <div className="grid gap-3 xl:grid-cols-[minmax(0,1.3fr)_minmax(320px,1fr)]"><section className="superficie min-w-0"><div className="tabela-container"><table className="tabela-operacional"><thead><tr><th>Canal</th><th>Status</th><th>Última mensagem</th><th>Falhas</th></tr></thead><tbody>{canais.map(c=>{const h=saude.find(i=>i.id===c.id);return <tr key={c.id} className={c.id===atual?.id?'linha-selecionada':''}><td><button onClick={()=>setSelecionado(c.id)} className="text-left"><Identidade nome={c.nome} telefone={c.telefone?formatarTelefone(c.telefone):'Número não conectado'} pequeno/></button></td><td><Selo tom={ROTULO_STATUS[c.status].tom}>{ROTULO_STATUS[c.status].texto}</Selo></td><td>{h?.ultimo_evento?formatarDataHora(h.ultimo_evento):'Sem evento'}</td><td>{h?.falhas||0}</td></tr>;})}</tbody></table></div>{canais.some(c=>c.status!=='CONECTADO')&&<p className="aviso-operacional mt-3">Há canais que precisam de atenção. Selecione um canal para conferir a conexão.</p>}</section>
+ <aside className="min-w-0 space-y-3">{atual&&<><LinhaCanal key={atual.id} canal={atual} departamentos={departamentos} aoMudar={()=>roteador.refresh()}/><section className="superficie"><h3 className="titulo-painel">Fila de envios com falha ({saude.find(c=>c.id===atual.id)?.falhas||0})</h3><div className="space-y-2">{falhas.filter(f=>f.canal_id===atual.id).map(f=><div key={f.id} className="flex items-center gap-2 rounded border p-2"><div className="min-w-0 flex-1"><p className="truncate text-xs text-marca-600">{f.erro||'Entrega não confirmada'}</p><p className="mt-1 text-[11px] text-bruma-600">{formatarDataHora(f.criado_em)}</p></div><Link className="botao-link" href={'/atendimento?conversa='+f.conversa_id}>Abrir mensagem</Link></div>)}{!falhas.some(f=>f.canal_id===atual.id)&&<p className="text-xs text-bruma-600">Nenhuma falha recente neste canal.</p>}</div><Link href={'/atendimento?escopo=equipe&caixa=falhas&canal='+atual.id} className="mt-4 block text-xs text-produto-800">Ver toda a fila de falhas →</Link><p className="mt-4 rounded bg-bruma-50 p-3 text-xs text-bruma-600">Revise a entrega no canal antes de reenviar. Uma resposta desconhecida não é reenviada automaticamente.</p></section></>}</aside></div>
       )}
 
       <DialogoNovoCanal
@@ -248,7 +248,7 @@ function LinhaCanal({
 
         <Separador />
 
-        <EnderecoWebhook canalId={canal.id} />
+        <details><summary className="cursor-pointer text-xs text-bruma-600">Configuração técnica do canal</summary><div className="mt-3"><EnderecoWebhook canalId={canal.id} /></div></details>
       </CorpoCartao>
 
       <DialogoQr

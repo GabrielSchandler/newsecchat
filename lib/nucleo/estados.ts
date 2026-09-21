@@ -64,10 +64,7 @@ const TRANSICOES: Record<EstadoConversa, Partial<Record<AcaoConversa, EstadoConv
   },
   AGUARDANDO_HUMANO: {
     MENSAGEM_DO_CLIENTE: 'AGUARDANDO_HUMANO',
-    // A IA continua respondendo na fila — só some quando um humano
-    // assume de verdade (HUMANO_ASSUMIU). Fica em AGUARDANDO_HUMANO,
-    // não em AGUARDANDO_CLIENTE, pra não sumir da fila de espera.
-    IA_RESPONDEU: 'AGUARDANDO_HUMANO',
+    // A solicitação de humano pausa a IA até uma devolução explícita.
     HUMANO_ASSUMIU: 'HUMANO',
     TRANSFERIR_DEPARTAMENTO: 'AGUARDANDO_HUMANO',
     DEVOLVER_PARA_IA: 'IA',
@@ -113,7 +110,7 @@ export function transicaoPermitida(atual: EstadoConversa, acao: AcaoConversa): b
  * processamento da mensagem recebida.
  */
 export function iaPodeResponder(estado: EstadoConversa): boolean {
-  return estado === 'IA' || estado === 'AGUARDANDO_HUMANO';
+  return estado === 'IA';
 }
 
 /** A conversa está com uma pessoa (assumida ou na fila para alguém)? */

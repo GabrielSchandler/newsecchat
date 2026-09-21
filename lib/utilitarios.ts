@@ -94,3 +94,10 @@ export function gerarApelido(nome: string): string {
     .replace(/^-+|-+$/g, '')
     .slice(0, 40);
 }
+
+/** Duração legível da espera corrente, sem confundir com minutos úteis do SLA. */
+export function formatarEspera(inicio:string,agora=Date.now()):string{
+ const min=Math.max(0,Math.floor((agora-Date.parse(inicio))/60000));
+ if(min<60)return min+' min';const horas=Math.floor(min/60);
+ if(horas<24)return horas+'h '+min%60+'min';return Math.floor(horas/24)+'d '+horas%24+'h';
+}

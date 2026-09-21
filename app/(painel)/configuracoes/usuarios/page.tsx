@@ -57,6 +57,7 @@ export default async function PaginaUsuarios() {
     const perfil = porPerfil.get(membro.perfil_id);
     return {
       membroId: membro.id,
+      escopo: membro.escopo_conversas, assumir:membro.pode_assumir, transferir:membro.pode_transferir,
       nome: perfil?.nome || perfil?.email || 'Sem nome',
       email: perfil?.email ?? '',
       papel: membro.papel,

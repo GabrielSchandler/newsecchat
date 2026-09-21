@@ -1,100 +1,28 @@
 import type { Metadata } from 'next';
-import { MessageSquareText } from 'lucide-react';
 import { exigirSessao } from '@/lib/sessao';
-import { EstadoVazio } from '@/componentes/ui/estrutura';
-import {
-  caixaValida,
-  carregarApoio,
-  carregarContagens,
-  carregarDetalheConversa,
-  carregarListaConversas,
-} from './dados';
-import { ListaConversas } from './lista';
+import { clienteServidor } from '@/lib/supabase/servidor';
+import { carregarApoio,carregarDetalheConversa } from './dados';
+import { carregarFila,carregarRespostas,lerFiltros } from '@/lib/operacao/dados';
+import { ListaOperacional } from './lista-operacional';
 import { PainelConversa } from './conversa';
-import { FichaContato } from './ficha';
+import { ContextoContato } from './contexto';
 import { SincronizadorLista } from './sincronizador';
-
-export const metadata: Metadata = { title: 'Atendimento' };
-
-// A central é sempre dinâmica: mostrar uma lista de conversas em cache
-// seria mostrar a fila de ontem.
-export const dynamic = 'force-dynamic';
-
-interface Parametros {
-  searchParams: Promise<Record<string, string | string[] | undefined>>;
-}
-
-function texto(valor: string | string[] | undefined): string | undefined {
-  if (Array.isArray(valor)) return valor[0];
-  return valor;
-}
-
-export default async function PaginaAtendimento({ searchParams }: Parametros) {
-  const sessao = await exigirSessao();
-  const parametros = await searchParams;
-
-  const caixa = caixaValida(texto(parametros.caixa));
-  const departamentoId = texto(parametros.departamento) ?? null;
-  const busca = texto(parametros.busca) ?? '';
-  const conversaId = texto(parametros.conversa) ?? null;
-
-  const [lista, contagens, apoio, detalhe] = await Promise.all([
-    carregarListaConversas(sessao.organizacao.id, sessao.membro.id, {
-      caixa,
-      departamentoId: departamentoId ?? undefined,
-      busca,
-    }),
-    carregarContagens(sessao.organizacao.id),
-    carregarApoio(sessao.organizacao.id),
-    conversaId ? carregarDetalheConversa(sessao.organizacao.id, conversaId) : Promise.resolve(null),
-  ]);
-
-  return (
-    <div className="flex h-screen overflow-hidden">
-      <div className="w-[300px] shrink-0">
-        <ListaConversas
-          lista={lista}
-          contagens={contagens}
-          departamentos={apoio.departamentos}
-          caixaAtual={caixa}
-          departamentoAtual={departamentoId}
-          buscaAtual={busca}
-          conversaSelecionada={conversaId}
-        />
-      </div>
-
-      {detalhe ? (
-        <>
-          <div className="min-w-0 flex-1">
-            <PainelConversa
-              detalhe={detalhe}
-              apoio={apoio}
-              meuMembroId={sessao.membro.id}
-              organizacaoId={sessao.organizacao.id}
-            />
-          </div>
-          <FichaContato detalhe={detalhe} apoio={apoio} />
-        </>
-      ) : (
-        <div className="flex min-w-0 flex-1 items-center justify-center bg-tela">
-          {/* Sem conversa aberta, ninguém mantém o tempo real vivo: este
-              componente assume esse papel para a lista continuar viva. */}
-          <SincronizadorLista organizacaoId={sessao.organizacao.id} />
-          <EstadoVazio
-            icone={<MessageSquareText className="h-5 w-5" />}
-            titulo={
-              contagens.todas > 0
-                ? 'Escolha uma conversa à esquerda'
-                : 'Nenhuma conversa por aqui ainda'
-            }
-            descricao={
-              contagens.todas > 0
-                ? 'A lista atualiza sozinha conforme as mensagens chegam.'
-                : 'Assim que um cliente enviar mensagem para um número conectado, a conversa aparece aqui. Se ainda não conectou nenhum número, comece por Configurações > Canais de WhatsApp.'
-            }
-          />
-        </div>
-      )}
-    </div>
-  );
+import { MessageSquare } from 'lucide-react';
+export const metadata:Metadata={title:'Atendimento'};
+export const dynamic='force-dynamic';
+export default async function Atendimento({searchParams}:{searchParams:Promise<Record<string,string|string[]|undefined>>}){
+ const s=await exigirSessao();const p=await searchParams;const filtros=lerFiltros(p);
+ const id=Array.isArray(p.conversa)?p.conversa[0]:p.conversa;
+ const propria=p.escopo!=='equipe';if(propria)filtros.responsavel=s.membro.id;
+ const db=await clienteServidor();
+ const [fila,apoio,detalhe,respostas,operacional]=await Promise.all([
+   carregarFila(filtros),carregarApoio(s.organizacao.id),id?carregarDetalheConversa(s.organizacao.id,id):null,carregarRespostas(),
+   id?db.from('fila_operacional').select('*').eq('id',id).eq('organizacao_id',s.organizacao.id).maybeSingle():null,
+ ]);
+ if(operacional?.error)throw new Error('Não foi possível carregar o contexto do atendimento.');
+ return <div className="central-atendimento" data-aberta={!!detalhe}>
+  <div className="lista-atendimento"><ListaOperacional itens={fila.itens} contagens={fila.contagens} total={fila.total} pagina={fila.pagina} apoio={apoio} propria={propria}/></div>
+  <div className="conversa-atendimento">{detalhe?<PainelConversa key={detalhe.conversa.id} detalhe={detalhe} apoio={apoio} meuMembroId={s.membro.id} organizacaoId={s.organizacao.id} operacional={operacional?.data||null} respostas={respostas} fuso={s.organizacao.fuso_horario}/>:<div className="flex h-full flex-col items-center justify-center gap-3 p-8 text-center"><MessageSquare className="text-produto-700" size={32}/><h1 className="text-lg font-semibold">Seu próximo atendimento começa aqui</h1><p className="max-w-sm text-sm text-bruma-600">Selecione uma conversa para responder e organizar a próxima ação.</p><SincronizadorLista organizacaoId={s.organizacao.id}/></div>}</div>
+  {detalhe&&<aside className="contexto-atendimento"><ContextoContato detalhe={detalhe} apoio={apoio} operacional={operacional?.data||null} membroId={s.membro.id} fuso={s.organizacao.fuso_horario}/></aside>}
+ </div>;
 }

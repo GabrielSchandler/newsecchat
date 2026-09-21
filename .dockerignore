@@ -8,3 +8,6 @@ node_modules
 coverage
 *.log
 supabase/esquema-completo.sql
+
+.next-dev
+.validacao

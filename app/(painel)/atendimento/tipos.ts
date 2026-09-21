@@ -14,6 +14,7 @@ import type {
   Departamento,
   EstadoConversaBanco,
   Etiqueta,
+  EventoConversa,
   MembroOrganizacao,
   Mensagem,
   MemoriaContato,
@@ -87,6 +88,7 @@ export interface DetalheConversa {
   departamento: Departamento | null;
   responsavelNome: string | null;
   mensagens: Mensagem[];
+  eventos: EventoConversa[];
   notas: (NotaInterna & { autorNome: string | null })[];
   memorias: MemoriaContato[];
   campos: { chave: string; rotulo: string; valor: string | null }[];

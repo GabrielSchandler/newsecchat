@@ -411,11 +411,7 @@ describe.skipIf(!urlBanco)('banco: isolamento, unicidade e concorrência', () =>
       expect(conversa[0].estado).toBe('AGUARDANDO_CLIENTE');
     });
 
-    it('a IA responde enquanto a conversa está na fila esperando um humano, e continua na fila', async () => {
-      // Achado real (16/09/2026): a IA dizia "vou chamar um especialista"
-      // e a conversa ia pra AGUARDANDO_HUMANO na hora — dali em diante
-      // ninguém respondia até um humano notar a fila e assumir. A IA
-      // agora continua respondendo nessa janela.
+    it('a IA não grava resposta enquanto a conversa aguarda humano', async () => {
       await admin.query(
         `update conversas set estado = 'AGUARDANDO_HUMANO', responsavel_id = null where id = $1`,
         [cenario.conversaA],
@@ -426,7 +422,7 @@ describe.skipIf(!urlBanco)('banco: isolamento, unicidade e concorrência', () =>
         [cenario.conversaA, `ia:${cenario.conversaA}:na-fila-${sufixo}`],
       );
 
-      expect(rows[0].mensagem_id).not.toBeNull();
+      expect(rows[0].mensagem_id).toBeNull();
 
       const { rows: conversa } = await admin.query('select estado from conversas where id = $1', [
         cenario.conversaA,

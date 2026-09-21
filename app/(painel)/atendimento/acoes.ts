@@ -126,6 +126,7 @@ const esquemaTransferencia = z.object({
   departamentoId: uuid.nullable(),
   membroId: uuid.nullable(),
   motivo: z.string().max(500).optional(),
+  nota: z.string().max(2000).optional(),
 });
 
 export async function transferirConversa(entrada: {
@@ -133,6 +134,7 @@ export async function transferirConversa(entrada: {
   departamentoId: string | null;
   membroId: string | null;
   motivo?: string;
+  nota?: string;
 }): Promise<Resultado> {
   const conferido = esquemaTransferencia.safeParse(entrada);
   if (!conferido.success) return { ok: false, erro: 'Dados de transferência inválidos' };
@@ -144,13 +146,13 @@ export async function transferirConversa(entrada: {
   const { sessao, supabase, conversa } = await carregarConversa(conferido.data.conversaId);
   if (!conversa) return { ok: false, erro: 'Conversa não encontrada' };
 
-  const { data: transferiu, error } = await supabase.rpc('transferir_conversa', {
-    p_conversa_id: conferido.data.conversaId,
-    p_departamento_id: conferido.data.departamentoId,
-    p_membro_id: conferido.data.membroId,
-    p_ator_membro_id: sessao.membro.id,
-    p_ator: 'ATENDENTE',
+  const { data: transferiu, error } = await supabase.rpc('transferir_com_nota', {
+    p_conversa: conferido.data.conversaId,
+    p_equipe: conferido.data.departamentoId,
+    p_membro: conferido.data.membroId,
+    p_ator: sessao.membro.id,
     p_motivo: conferido.data.motivo?.trim() || null,
+    p_nota: conferido.data.nota?.trim() || null,
   });
 
   if (error || !transferiu) {
@@ -175,20 +177,22 @@ export async function transferirConversa(entrada: {
   return { ok: true };
 }
 
-export async function encerrarConversa(conversaId: string, motivo?: string): Promise<Resultado> {
+export async function encerrarConversa(conversaId: string, motivo?: string, versao?: number): Promise<Resultado> {
   if (!uuid.safeParse(conversaId).success) return { ok: false, erro: 'Conversa inválida' };
 
   const { sessao, supabase, conversa } = await carregarConversa(conversaId);
   if (!conversa) return { ok: false, erro: 'Conversa não encontrada' };
 
-  const { data: encerrou, error } = await supabase.rpc('encerrar_conversa', {
+  if (!Number.isInteger(versao) || !versao || versao < 1) return {ok:false,erro:'Atualize o atendimento antes de concluir.'};
+  const { data: encerrou, error } = await supabase.rpc('encerrar_conversa_com_versao', {
     p_conversa_id: conversaId,
     p_membro_id: sessao.membro.id,
+    p_versao: versao,
     p_motivo: motivo?.trim() || null,
   });
 
   if (error || !encerrou) {
-    return { ok: false, erro: 'Não foi possível encerrar a conversa.' };
+    return { ok: false, erro: 'O atendimento mudou ou há um envio em confirmação. Atualize e confira as mensagens antes de concluir.' };
   }
 
   await registrarAuditoria({
@@ -613,4 +617,16 @@ export async function obterUrlMidia(arquivoId: string): Promise<ResultadoUrlMidi
     });
     return { ok: false, erro: 'Não foi possível gerar o link do arquivo.' };
   }
+}
+
+export async function carregarMensagensAnteriores(conversaId:string,antes:string,ultimoId:string){
+ if(!uuid.safeParse(conversaId).success||!uuid.safeParse(ultimoId).success||!z.string().datetime({offset:true}).safeParse(antes).success)return {ok:false as const,erro:'Cursor inválido.'};
+ const {supabase,conversa}=await carregarConversa(conversaId);if(!conversa)return {ok:false as const,erro:'Conversa não disponível.'};
+ const {data,error}=await supabase.from('mensagens').select('*').eq('conversa_id',conversaId).or('criado_em.lt.'+antes+',and(criado_em.eq.'+antes+',id.lt.'+ultimoId+')').order('criado_em',{ascending:false}).order('id',{ascending:false}).limit(60);
+ if(error)return {ok:false as const,erro:'Não foi possível carregar o histórico.'};return {ok:true as const,mensagens:data.slice().reverse(),mais:data.length===60};
+}
+export async function conferirEntrega(mensagem:string,entregue:boolean){
+ if(!uuid.safeParse(mensagem).success||typeof entregue!=='boolean')return {ok:false,erro:'Mensagem inválida.'};
+ await exigirSessao();const db=await clienteServidor();const {error}=await db.rpc('resolver_despacho',{p_mensagem:mensagem,p_entregue:entregue});
+ if(error)return {ok:false,erro:error.message};revalidatePath('/atendimento');revalidatePath('/configuracoes/canais');return {ok:true};
 }

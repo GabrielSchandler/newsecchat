@@ -19,15 +19,9 @@ import {
 } from '@/lib/nucleo/estados';
 
 describe('máquina de estados da conversa', () => {
-  it('a IA responde quando a conversa é dela ou está na fila esperando um humano', () => {
-    // AGUARDANDO_HUMANO entra aqui de propósito: a IA pediu um humano,
-    // mas ninguém assumiu ainda — silêncio nessa janela deixava o
-    // cliente sem resposta até alguém notar a fila (achado real,
-    // 16/09/2026, ver `_memoria/estrategia.md`). Só HUMANO e ENCERRADA
-    // (e AGUARDANDO_CLIENTE, que é dela mesma esperando o cliente
-    // escrever) tiram a fala da IA de verdade.
+  it('a IA responde apenas quando está ativa', () => {
     expect(iaPodeResponder('IA')).toBe(true);
-    expect(iaPodeResponder('AGUARDANDO_HUMANO')).toBe(true);
+    expect(iaPodeResponder('AGUARDANDO_HUMANO')).toBe(false);
 
     for (const estado of ['HUMANO', 'AGUARDANDO_CLIENTE', 'ENCERRADA'] as const) {
       expect(iaPodeResponder(estado)).toBe(false);
@@ -52,9 +46,9 @@ describe('máquina de estados da conversa', () => {
     expect(estadoAoReceberMensagem('IA')).toBe('IA');
   });
 
-  it('conversa na fila humana continua na fila quando o cliente insiste, e a IA pode responder', () => {
+  it('conversa na fila humana continua na fila quando o cliente insiste, e a IA permanece pausada', () => {
     expect(estadoAoReceberMensagem('AGUARDANDO_HUMANO')).toBe('AGUARDANDO_HUMANO');
-    expect(iaPodeResponder('AGUARDANDO_HUMANO')).toBe(true);
+    expect(iaPodeResponder('AGUARDANDO_HUMANO')).toBe(false);
   });
 
   it('a IA só volta por ação explícita de devolução', () => {
@@ -71,11 +65,11 @@ describe('máquina de estados da conversa', () => {
     expect(transicaoPermitida('ENCERRADA', 'IA_RESPONDEU')).toBe(false);
   });
 
-  it('a IA pode responder na fila, e a resposta não tira a conversa da fila', () => {
-    expect(transicaoPermitida('AGUARDANDO_HUMANO', 'IA_RESPONDEU')).toBe(true);
+  it('a fila humana recusa respostas da IA', () => {
+    expect(transicaoPermitida('AGUARDANDO_HUMANO', 'IA_RESPONDEU')).toBe(false);
     // Fica em AGUARDANDO_HUMANO, não em AGUARDANDO_CLIENTE — senão a
     // conversa sumiria da fila de espera sem ninguém ter assumido.
-    expect(proximoEstado('AGUARDANDO_HUMANO', 'IA_RESPONDEU')).toBe('AGUARDANDO_HUMANO');
+    expect(proximoEstado('AGUARDANDO_HUMANO', 'IA_RESPONDEU')).toBeNull();
   });
 
   it('transferir departamento sempre deixa a conversa em fila humana', () => {

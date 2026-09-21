@@ -89,11 +89,15 @@ export function useTempoReal({
           }
         },
       )
+      .on('postgres_changes',{event:'*',schema:'public',table:'retornos',filter:`organizacao_id=eq.${organizacaoId}`},()=>recarregarComAtraso())
       .subscribe((situacao) => {
         definirConectado(situacao === 'SUBSCRIBED');
+        if (situacao === 'SUBSCRIBED') recarregarComAtraso();
       });
 
+    const relogio=setInterval(()=>{if(document.visibilityState==='visible')recarregarComAtraso();},30000);
     return () => {
+      clearInterval(relogio);
       if (temporizador.current) clearTimeout(temporizador.current);
       void supabase.removeChannel(canal);
     };
