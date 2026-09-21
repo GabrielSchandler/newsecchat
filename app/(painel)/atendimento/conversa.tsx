@@ -23,7 +23,6 @@ import {
   ArrowLeft,
   UserRound,
   Sparkles,
-  XCircle,
 } from 'lucide-react';
 import { Botao } from '@/componentes/ui/botao';
 import { AreaTexto, Campo, Selecao } from '@/componentes/ui/campo';
@@ -943,9 +942,9 @@ function DialogoEncerrar({
 
   return (
     <Dialogo open={aberto} onOpenChange={definirAberto}>
-      <Botao variante="fantasma" tamanho="pequeno" disabled={ocupado} onClick={() => definirAberto(true)}>
-        <XCircle className="h-3.5 w-3.5" aria-hidden />
-        Encerrar
+      <Botao variante="principal" tamanho="pequeno" disabled={ocupado} onClick={() => definirAberto(true)}>
+        <Check className="h-3.5 w-3.5" aria-hidden />
+        Concluir
       </Botao>
 
       <ConteudoDialogo
@@ -979,7 +978,7 @@ function DialogoEncerrar({
               }
             }}
           >
-            Encerrar
+            Concluir
           </Botao>
         </RodapeDialogo>
       </ConteudoDialogo>
