@@ -146,8 +146,9 @@ services:
       GOOGLE_REDIRECT_URI: ${GOOGLE_REDIRECT_URI}
       NIVEL_LOG: ${NIVEL_LOG:-info}
       # De quantos em quantos segundos o worker procura trabalho novo no
-      # banco. É o atraso máximo entre a mensagem chegar e a IA começar.
-      VARREDURA_RAPIDA_SEGUNDOS: ${VARREDURA_RAPIDA_SEGUNDOS:-3}
+      # banco. É o atraso máximo entre a mensagem chegar e a IA começar, e
+      # entre o atendente enviar e a mensagem sair.
+      VARREDURA_RAPIDA_SEGUNDOS: ${VARREDURA_RAPIDA_SEGUNDOS:-1}
 
   # -------------------------------------------------------------------
   # Caddy — põe a Evolution na internet com HTTPS.

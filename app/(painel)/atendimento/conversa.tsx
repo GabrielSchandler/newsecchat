@@ -88,6 +88,8 @@ export function PainelConversa({
   const alterarTexto = (valor: string) => { definirTexto(valor); try { sessionStorage.setItem(chaveRascunho, valor); } catch { /* Rascunho continua na memória se storage indisponível. */ } };
   const [enviando, definirEnviando] = React.useState(false);
   const [ocupado, definirOcupado] = React.useState(false);
+  const textoAtual = React.useRef(texto);
+  textoAtual.current = texto;
   const fim = React.useRef<HTMLDivElement>(null);
   const rolagem=React.useRef<HTMLDivElement>(null);
   const [historico,setHistorico]=React.useState<Mensagem[]>([]),[mais,setMais]=React.useState(detalhe.mensagens.length>=120),[carregandoHistorico,setCarregandoHistorico]=React.useState(false);
@@ -122,9 +124,14 @@ export function PainelConversa({
     const area=rolagem.current;if(!area||area.scrollHeight-area.scrollTop-area.clientHeight<220)fim.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
   }, [mensagens.length]);
 
+  // "Visualizada" é um estado da conversa, não de quem olha. Se um
+  // supervisor abrir a conversa de um consultor só para conferir, isso NÃO
+  // pode tirá-la de "Novos" do consultor — ele ainda não a viu. Marca como
+  // lida quem é o responsável, ou qualquer pessoa quando ainda não há um.
+  const podeMarcarComoLida = conversa.responsavel_id === meuMembroId || !conversa.responsavel_id;
   React.useEffect(() => {
-    if (conversa.nao_lidas > 0) void marcarComoLida(conversa.id);
-  }, [conversa.id, conversa.nao_lidas]);
+    if (conversa.nao_lidas > 0 && podeMarcarComoLida) void marcarComoLida(conversa.id);
+  }, [conversa.id, conversa.nao_lidas, podeMarcarComoLida]);
 
   const minha = conversa.responsavel_id === meuMembroId;
   const encerrada = conversa.estado === 'ENCERRADA';
@@ -153,10 +160,12 @@ export function PainelConversa({
   async function aoEnviar(evento: React.FormEvent) {
     evento.preventDefault();
     const conteudo = texto.trim();
-    if (!conteudo || enviando) return;
+    if (!conteudo) return;
 
-    definirEnviando(true);
     if (notaInterna) {
+      if (enviando) return;
+
+      definirEnviando(true);
       try { const r = await adicionarNota({ conversaId: conversa.id, texto: conteudo }); if (!r.ok) { toast.error(r.erro); return; } alterarTexto(''); roteador.refresh(); }
       catch { toast.error('Não foi possível salvar a nota. Seu texto foi preservado.'); }
       finally { definirEnviando(false); }
@@ -202,25 +211,58 @@ export function PainelConversa({
     definirMensagens((atuais) => [...atuais, provisoria]);
     alterarTexto('');
 
+    // O envio segue em segundo plano: a caixa de texto continua livre (e com
+    // o foco) para a próxima mensagem. Antes ela ficava desabilitada até o
+    // servidor responder, e o atendente esperava a cada mensagem.
+    void enviarEmSegundoPlano(provisoria, conteudo);
+  }
+
+  async function enviarEmSegundoPlano(provisoria: Mensagem, conteudo: string) {
+    const conversaDoEnvio = conversa.id;
+    const aindaNaMesmaConversa = () => conversaAtual.current === conversaDoEnvio;
+
+    function falhar(motivo: string) {
+      if (aindaNaMesmaConversa()) {
+        definirMensagens((atuais) => atuais.filter((item) => item.id !== provisoria.id));
+        // Devolve o texto sem apagar o que a pessoa já digitou depois.
+        alterarTexto(textoAtual.current.trim() ? `${conteudo}
+${textoAtual.current}` : conteudo);
+      } else {
+        // Já abriu outra conversa: guarda o texto como rascunho da conversa
+        // de origem, para ele reaparecer quando ela voltar.
+        try { sessionStorage.setItem(`newsec:rascunho:${organizacaoId}:${meuMembroId}:${conversaDoEnvio}:mensagem`, conteudo); } catch { /* Sem storage, o aviso abaixo ainda diz o que houve. */ }
+      }
+      toast.error(aindaNaMesmaConversa() ? motivo : `${motivo} A mensagem para ${nome} voltou para o rascunho.`);
+    }
+
     try {
-      const resultado = await enviarMensagemManual({ conversaId: conversa.id, texto: conteudo });
-      if (conversaAtual.current !== conversa.id) return;
+      const resultado = await enviarMensagemManual({ conversaId: conversaDoEnvio, texto: conteudo });
 
       if (!resultado.ok) {
-        definirMensagens((atuais) => atuais.filter((item) => item.id !== provisoria.id));
-        alterarTexto(conteudo);
-        toast.error(resultado.erro ?? 'Não foi possível enviar.');
+        falhar(resultado.erro ?? 'Não foi possível enviar.');
         return;
       }
 
       if (resultado.aviso) toast.warning(resultado.aviso);
-      roteador.refresh();
+      if (!aindaNaMesmaConversa()) return;
+
+      // Troca o balão provisório pelo definitivo. Se a linha real já chegou
+      // pelo tempo real, o provisório apenas sai; senão ele assume o id real
+      // e o tempo real, ao chegar, só atualiza a linha.
+      const idReal = resultado.mensagemId;
+      definirMensagens((atuais) => {
+        if (!idReal) return atuais;
+        if (atuais.some((item) => item.id === idReal)) return atuais.filter((item) => item.id !== provisoria.id);
+        return atuais.map((item) => (item.id === provisoria.id ? { ...item, id: idReal } : item));
+      });
+
+      // Recarrega agora quando a tela ficaria desatualizada: enviar assume a
+      // conversa (o cabeçalho ainda mostra o estado antigo) ou o tempo real
+      // está fora do ar (ninguém avisaria que o "cliente aguarda" acabou).
+      // Fora isso, o tempo real traz a atualização sem uma recarga extra.
+      if (!conectado || conversa.estado !== 'HUMANO' || conversa.responsavel_id !== meuMembroId) roteador.refresh();
     } catch {
-      definirMensagens((atuais) => atuais.filter((item) => item.id !== provisoria.id));
-      if (conversaAtual.current === conversa.id) alterarTexto(conteudo);
-      toast.error('Falha de comunicação com o servidor.');
-    } finally {
-      definirEnviando(false);
+      falhar('Falha de comunicação com o servidor.');
     }
   }
 

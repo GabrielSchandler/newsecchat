@@ -1,6 +1,7 @@
 'use server';
 
 import { revalidatePath } from 'next/cache';
+import { after } from 'next/server';
 import { z } from 'zod';
 import { clienteServidor } from '@/lib/supabase/servidor';
 import { exigirSessao } from '@/lib/sessao';
@@ -14,6 +15,8 @@ export interface Resultado {
   ok: boolean;
   erro?: string;
   aviso?: string;
+  /** Id da mensagem gravada, quando a ação envia uma: a tela troca o balão provisório pelo definitivo. */
+  mensagemId?: string;
 }
 
 const uuid = z.string().uuid('Identificador inválido');
@@ -287,51 +290,60 @@ export async function enviarMensagemManual(entrada: {
     }
   }
 
-  const { data: canal } = await supabase
-    .from('canais')
-    .select('status, ativo')
-    .eq('id', conversa.canal_id)
-    .maybeSingle();
+  // O estado do canal só decide o aviso no fim; consultá-lo junto com a
+  // gravação tira uma ida ao banco do caminho do envio.
+  const consultaCanal = supabase.from('canais').select('status, ativo').eq('id', conversa.canal_id).maybeSingle();
 
   try {
-    const resultado = await enviarMensagem(supabase, {
-      organizacaoId: sessao.organizacao.id,
-      conversaId: conversa.id,
-      contatoId: conversa.contato_id,
-      canalId: conversa.canal_id,
-      autor: 'ATENDENTE',
-      autorMembroId: sessao.membro.id,
-      conteudo: conferido.data.texto,
-      chaveIdempotencia: chaveEnvioManual(conversa.id, sessao.membro.id, conferido.data.texto),
-      remetenteNome: sessao.perfil.nome || sessao.perfil.email,
-    });
+    const [resultado, { data: canal }] = await Promise.all([
+      enviarMensagem(supabase, {
+        organizacaoId: sessao.organizacao.id,
+        conversaId: conversa.id,
+        contatoId: conversa.contato_id,
+        canalId: conversa.canal_id,
+        autor: 'ATENDENTE',
+        autorMembroId: sessao.membro.id,
+        conteudo: conferido.data.texto,
+        chaveIdempotencia: chaveEnvioManual(conversa.id, sessao.membro.id, conferido.data.texto),
+        remetenteNome: sessao.perfil.nome || sessao.perfil.email,
+      }),
+      consultaCanal,
+    ]);
 
     if (!resultado.mensagemId) {
       return { ok: false, erro: 'Não foi possível registrar a mensagem.' };
     }
 
-    await registrarAuditoria({
-      organizacaoId: sessao.organizacao.id,
-      acao: ACOES.MENSAGEM_ENVIADA,
-      atorPerfilId: sessao.perfil.id,
-      atorEmail: sessao.perfil.email,
-      entidade: 'mensagens',
-      entidadeId: resultado.mensagemId,
-      metadados: { conversa_id: conversa.id },
-    });
+    // Auditoria depois da resposta: ela nunca derruba o envio (ver
+    // lib/auditoria.ts), então não há motivo para o atendente esperar por ela.
+    const mensagemId = resultado.mensagemId;
+    after(() =>
+      registrarAuditoria({
+        organizacaoId: sessao.organizacao.id,
+        acao: ACOES.MENSAGEM_ENVIADA,
+        atorPerfilId: sessao.perfil.id,
+        atorEmail: sessao.perfil.email,
+        entidade: 'mensagens',
+        entidadeId: mensagemId,
+        metadados: { conversa_id: conversa.id },
+      }),
+    );
 
-    revalidatePath('/atendimento');
+    // Sem `revalidatePath` de propósito: ele refaria a página inteira no
+    // servidor antes de responder. A tela já mostra o balão e o tempo real
+    // traz a linha definitiva e a atualização da lista.
 
     // A mensagem já está gravada e será entregue assim que o canal voltar.
     // Avisar é honesto; recusar o envio faria o atendente digitar de novo.
     if (canal && (!canal.ativo || canal.status !== 'CONECTADO')) {
       return {
         ok: true,
+        mensagemId,
         aviso: 'A mensagem foi registrada, mas o canal não está conectado. Ela será entregue quando a conexão voltar.',
       };
     }
 
-    return { ok: true };
+    return { ok: true, mensagemId };
   } catch (erro) {
     if (erro instanceof ErroConfiguracao) {
       return { ok: false, erro: erro.message };
@@ -462,7 +474,8 @@ export async function enviarAudioManual(entrada: FormData): Promise<Resultado> {
       metadados: { conversa_id: conversa.id, tipo: 'AUDIO' },
     });
 
-    revalidatePath('/atendimento');
+    // Sem `revalidatePath`: quem chama (`executar`, na tela da conversa)
+    // já recarrega a conversa; fazer as duas coisas refaria a página duas vezes.
 
     if (canal && (!canal.ativo || canal.status !== 'CONECTADO')) {
       return {

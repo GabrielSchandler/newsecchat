@@ -70,9 +70,11 @@ export const ambienteServidor = {
    * não passou pelo Redis — é o caminho inteiro quando quem gerou o
    * trabalho é a Vercel, que nunca tem REDIS_URL (ver lib/filas/produtor.ts,
    * modo BANCO). Não é uma rede de segurança rara: é o atraso que toda
-   * mensagem de WhatsApp carrega antes de a IA começar a responder.
+   * mensagem de WhatsApp carrega antes de a IA começar a responder e,
+   * na saída, o atraso entre o atendente apertar Enviar e a mensagem sair.
+   * A consulta usa índice parcial, então 1 s custa quase nada.
    */
-  varreduraRapidaSegundos: Number(process.env.VARREDURA_RAPIDA_SEGUNDOS) || 3,
+  varreduraRapidaSegundos: Number(process.env.VARREDURA_RAPIDA_SEGUNDOS) || 1,
 
   googleClienteId: process.env.GOOGLE_CLIENT_ID ?? '',
   googleClienteSegredo: process.env.GOOGLE_CLIENT_SECRET ?? '',

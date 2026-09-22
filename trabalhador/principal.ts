@@ -53,16 +53,25 @@ const INTERVALO_VARREDURA_MS = ambienteServidor.varreduraRapidaSegundos * 1000;
 // em voo — não é o caso de eventos vindos do webhook da Vercel, que nunca
 // tem Redis e sempre depende desta varredura (modo BANCO); ali o evento já
 // está commitado no banco antes da função responder. 30 segundos fazia
-// sentido como rede de segurança rara; como caminho único de toda mensagem
-// de WhatsApp, só somava atraso sem evitar corrida nenhuma.
-const IDADE_MINIMA_EVENTO_MS = 3_000;
+// sentido como rede de segurança rara; 3 segundos ainda somava, a cada
+// mensagem que chega, um atraso que ninguém percebia como decisão. Não
+// existe corrida a evitar de verdade: o jobId `evento:<id>` é estável, então
+// enfileirar duas vezes não processa duas vezes.
+const IDADE_MINIMA_EVENTO_MS = 500;
 
 // Mesmo raciocínio do IDADE_MINIMA_EVENTO_MS, e mesmo esquecimento: ficou
-// em 120_000 quando o resto da varredura foi acelerado. Mensagem enviada
-// pelo atendente na tela (Server Action da Vercel, sempre em modo BANCO)
-// dependia só desta varredura — com dois minutos de buffer, "enviei e não
-// saiu" era literalmente esperar dois minutos, não estar quebrado.
-const IDADE_MINIMA_MENSAGEM_MS = 3_000;
+// em 120_000 quando o resto da varredura foi acelerado, depois em 3_000.
+// Mensagem enviada pelo atendente na tela (Server Action da Vercel, sempre
+// em modo BANCO) só sai por esta varredura, então "esperar a mensagem
+// amadurecer" era atraso puro no envio. Não há risco de envio duplicado: o
+// despacho reserva a mensagem no banco (`reservar_despacho_mensagem`) e um
+// segundo trabalho para a mesma mensagem sai sem enviar nada.
+const IDADE_MINIMA_MENSAGEM_MS = 500;
+
+// Planilhas e campanhas são recuperação, não caminho de entrada: nada
+// depende de olhá-las a cada segundo. Rodam num ciclo à parte para que
+// acelerar o de mensagens não multiplique consultas sem necessidade.
+const INTERVALO_RECUPERACAO_MS = 30_000;
 
 const trabalhadores: Worker[] = [];
 let encerrando = false;
@@ -246,20 +255,39 @@ async function varrerCampanhasEmExecucao(): Promise<void> {
   }
 }
 
-async function ciclarVarreduras(): Promise<void> {
+async function dormir(ms: number): Promise<void> {
+  await new Promise((resolver) => setTimeout(resolver, ms));
+}
+
+/** Caminho de entrada e de saída das mensagens: o ciclo que o cliente sente. */
+async function ciclarMensagens(): Promise<void> {
   while (!encerrando) {
     try {
       await varrerEventosPendentes();
       await varrerMensagensPendentes();
-      await varrerPlanilhas();
-      await varrerCampanhasEmExecucao();
     } catch (erro) {
-      log.error('Falha no ciclo de varredura', {
+      log.error('Falha no ciclo de varredura de mensagens', {
         erro: erro instanceof Error ? erro.message : String(erro),
       });
     }
 
-    await new Promise((resolver) => setTimeout(resolver, INTERVALO_VARREDURA_MS));
+    await dormir(INTERVALO_VARREDURA_MS);
+  }
+}
+
+/** Retomada de planilhas e campanhas: devagar, sem pressa. */
+async function ciclarRecuperacoes(): Promise<void> {
+  while (!encerrando) {
+    try {
+      await varrerPlanilhas();
+      await varrerCampanhasEmExecucao();
+    } catch (erro) {
+      log.error('Falha no ciclo de recuperação', {
+        erro: erro instanceof Error ? erro.message : String(erro),
+      });
+    }
+
+    await dormir(INTERVALO_RECUPERACAO_MS);
   }
 }
 
@@ -310,7 +338,8 @@ function principal(): void {
     evolution_configurada: Boolean(ambienteServidor.evolutionUrl),
   });
 
-  void ciclarVarreduras();
+  void ciclarMensagens();
+  void ciclarRecuperacoes();
 
   process.on('SIGTERM', () => void encerrar('SIGTERM'));
   process.on('SIGINT', () => void encerrar('SIGINT'));

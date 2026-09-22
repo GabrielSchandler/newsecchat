@@ -25,42 +25,50 @@ export interface SessaoAtual {
 /**
  * `cache` do React deduplica a consulta dentro de uma mesma renderização:
  * dez componentes chamando `sessaoAtual()` fazem uma consulta, não dez.
+ *
+ * `getUser()` é uma chamada HTTP ao Auth do Supabase (valida o token no
+ * servidor, não só lê o cookie). Como a Vercel roda longe do banco, cada
+ * chamada custa uma ida e volta inteira; por isso ela vive aqui, dentro do
+ * `cache`, e não solta em cada função que precisa saber quem é o usuário.
  */
-export const sessaoAtual = cache(async (): Promise<SessaoAtual | null> => {
+const usuarioAtual = cache(async () => {
   const supabase = await clienteServidor();
 
   const {
     data: { user },
   } = await supabase.auth.getUser();
 
+  return user;
+});
+
+export const sessaoAtual = cache(async (): Promise<SessaoAtual | null> => {
+  const supabase = await clienteServidor();
+
+  const user = await usuarioAtual();
   if (!user) return null;
 
-  const { data: perfil } = await supabase.from('perfis').select('*').eq('id', user.id).maybeSingle();
-  if (!perfil) return null;
+  // Perfil e vínculo não dependem um do outro: as duas consultas saem juntas.
+  const [{ data: perfil }, { data: membro }] = await Promise.all([
+    supabase.from('perfis').select('*').eq('id', user.id).maybeSingle(),
+    supabase
+      .from('membros_organizacao')
+      .select('*')
+      .eq('perfil_id', user.id)
+      .eq('ativo', true)
+      .order('criado_em', { ascending: true })
+      .limit(1)
+      .maybeSingle(),
+  ]);
 
-  const { data: membro } = await supabase
-    .from('membros_organizacao')
-    .select('*')
-    .eq('perfil_id', user.id)
-    .eq('ativo', true)
-    .order('criado_em', { ascending: true })
-    .limit(1)
-    .maybeSingle();
+  if (!perfil || !membro) return null;
 
-  if (!membro) return null;
-
-  const { data: organizacao } = await supabase
-    .from('organizacoes')
-    .select('*')
-    .eq('id', membro.organizacao_id)
-    .maybeSingle();
+  // Organização e equipes também só dependem do vínculo.
+  const [{ data: organizacao }, { data: vinculos }] = await Promise.all([
+    supabase.from('organizacoes').select('*').eq('id', membro.organizacao_id).maybeSingle(),
+    supabase.from('membros_departamento').select('departamento_id, departamentos(*)').eq('membro_id', membro.id),
+  ]);
 
   if (!organizacao) return null;
-
-  const { data: vinculos } = await supabase
-    .from('membros_departamento')
-    .select('departamento_id, departamentos(*)')
-    .eq('membro_id', membro.id);
 
   const departamentos = (vinculos ?? [])
     .map((vinculo) => vinculo.departamentos as unknown as Departamento | null)
@@ -80,10 +88,7 @@ export const sessaoAtual = cache(async (): Promise<SessaoAtual | null> => {
  * sem organização, manda para a criação da organização.
  */
 export async function exigirSessao(): Promise<SessaoAtual> {
-  const supabase = await clienteServidor();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await usuarioAtual();
 
   if (!user) redirect('/entrar');
 

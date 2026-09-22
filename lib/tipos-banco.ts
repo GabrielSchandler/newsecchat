@@ -722,6 +722,7 @@ export type BancoDados = {
       relatorio_atendimento: { Args: { p_inicio: string; p_fim: string; p_equipe?: string | null; p_canal?: string | null }; Returns: Json };
       carga_consultores: { Args: { p_equipe?: string | null; p_canal?: string | null }; Returns: Json };
       fila_contagens: { Args: { p_busca?: string; p_equipe?: string | null; p_responsavel?: string | null; p_canal?: string | null }; Returns: Json };
+      atendimento_contagens: { Args: { p_membro: string; p_busca?: string; p_equipe?: string | null; p_canal?: string | null }; Returns: Json };
       assumir_conversa: {
         Args: { p_conversa_id: string; p_membro_id: string; p_motivo?: string | null };
         Returns: boolean;

@@ -130,13 +130,17 @@
   .abas-operacionais a, .abas-operacionais button { @apply whitespace-nowrap border-b-2 border-transparent px-4 py-3 text-[12px] text-tinta-700; }
   .abas-operacionais [aria-current=page], .abas-operacionais [aria-selected=true] { @apply border-produto-500 font-semibold text-produto-800; }
   .central-atendimento { @apply flex h-full min-h-0 overflow-hidden bg-white; }
-  .lista-atendimento { @apply flex h-full w-[300px] shrink-0 flex-col border-r; }
-  .conversa-atendimento { @apply min-w-0 flex-1; }
+  .lista-atendimento { @apply flex h-full w-[320px] shrink-0 flex-col border-r; }
+  .conversa-atendimento { @apply relative min-w-0 flex-1; }
+  .aba-escopo { @apply flex min-w-0 flex-col items-center justify-center gap-0.5 rounded-md border border-transparent px-1 py-1.5 text-center text-[11px] font-medium leading-tight text-tinta-700 hover:bg-bruma-100; }
+  .aba-escopo strong { @apply text-[15px] font-semibold leading-none tabular-nums; }
+  .aba-escopo[aria-current=true] { @apply border-produto-500 bg-produto-50 text-produto-800; }
   .contexto-atendimento { @apply hidden h-full w-[270px] shrink-0 overflow-y-auto border-l bg-white min-[1400px]:block; }
   .filtro-fila { @apply inline-flex items-center justify-center gap-1.5 rounded border bg-bruma-50 px-2 py-1.5 text-[11px] font-medium; }
   .filtro-fila[aria-current=true] { @apply border-produto-700 bg-produto-700 text-white; }
   .item-conversa { @apply mx-1.5 flex gap-2.5 rounded-md border border-transparent px-2.5 py-3 hover:bg-bruma-50; }
   .item-conversa[aria-current=true] { @apply border-produto-500 bg-produto-50; }
+  .item-conversa[data-abrindo=true] { @apply border-produto-500/60 bg-produto-50/70; }
   .metricas-operacionais { @apply grid grid-cols-2 gap-3 xl:grid-cols-4; }
   .metrica { @apply flex min-h-[83px] items-center gap-3 rounded-lg border bg-white p-3; }
   .metrica-icone { @apply flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-produto-50 text-produto-700; }
@@ -154,4 +158,16 @@
     .pagina-operacional { @apply p-3; }
     .tabela-operacional { min-width:580px; }
   }
+}
+
+/* Barra de progresso do painel da conversa (ver abrindo.tsx). */
+@keyframes deslizar-barra {
+  from { transform: translateX(-100%); }
+  to { transform: translateX(300%); }
+}
+
+.barra-abrindo { animation: deslizar-barra 1s ease-in-out infinite; }
+
+@media (prefers-reduced-motion: reduce) {
+  .barra-abrindo { animation: none; width: 100%; }
 }
