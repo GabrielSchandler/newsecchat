@@ -115,11 +115,12 @@ async function processarMensagem(
   // Mensagem que o próprio número enviou (ex.: o atendente respondeu pelo
   // celular). Entra no histórico para a tela ficar fiel, mas não aciona a
   // IA — senão ela responderia à própria empresa.
-  const contato = await resolverContato(supabase, canal.organizacao_id, {
-    telefone: evento.telefone,
-    nomeExibicao: evento.nomeExibicao,
-    origem: 'WHATSAPP',
-  });
+  const contato = await resolverContato(
+    supabase,
+    canal.organizacao_id,
+    { telefone: evento.telefone, nomeExibicao: evento.nomeExibicao, origem: 'WHATSAPP' },
+    canal,
+  );
 
   if (contato.bloqueado) {
     registro.info('Mensagem de contato bloqueado; ignorada', { contato_id: contato.id });

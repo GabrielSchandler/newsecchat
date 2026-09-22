@@ -10,6 +10,7 @@ import { PainelConversa } from './conversa';
 import { ContextoContato } from './contexto';
 import { SincronizadorLista } from './sincronizador';
 import { IndicadorAbrindo } from './abrindo';
+import { ColunasAtendimento } from './colunas';
 
 export const metadata: Metadata = { title: 'Atendimento' };
 export const dynamic = 'force-dynamic';
@@ -53,41 +54,45 @@ export default async function Atendimento({
 
   return (
     <div className="central-atendimento" data-aberta={!!detalhe}>
-      <div className="lista-atendimento">
-        <ListaOperacional
-          itens={fila.itens}
-          contagens={fila.contagens}
-          total={fila.total}
-          pagina={fila.pagina}
-          tamanho={fila.tamanho}
-          apoio={apoio}
-          escopo={escopo}
-          caixa={caixa}
-          papel={s.papel}
-        />
-      </div>
-      <div className="conversa-atendimento">
-        <IndicadorAbrindo conversaAtual={detalhe?.conversa.id ?? null} />
-        {detalhe ? (
-          <PainelConversa
-            key={detalhe.conversa.id}
-            detalhe={detalhe}
+      <ColunasAtendimento
+        lista={
+          <ListaOperacional
+            itens={fila.itens}
+            contagens={fila.contagens}
+            total={fila.total}
+            pagina={fila.pagina}
+            tamanho={fila.tamanho}
             apoio={apoio}
-            meuMembroId={s.membro.id}
-            organizacaoId={s.organizacao.id}
-            operacional={operacional?.data || null}
-            respostas={respostas}
-            fuso={s.organizacao.fuso_horario}
+            escopo={escopo}
+            caixa={caixa}
+            papel={s.papel}
           />
-        ) : (
-          <div className="flex h-full flex-col items-center justify-center gap-3 p-8 text-center">
-            <MessageSquare className="text-produto-700" size={32} />
-            <h2 className="text-lg font-semibold">Seu próximo atendimento começa aqui</h2>
-            <p className="max-w-sm text-sm text-bruma-600">Selecione uma conversa para responder e organizar a próxima ação.</p>
-            <SincronizadorLista organizacaoId={s.organizacao.id} />
+        }
+        conversa={
+          <div className="conversa-atendimento">
+            <IndicadorAbrindo conversaAtual={detalhe?.conversa.id ?? null} />
+            {detalhe ? (
+              <PainelConversa
+                key={detalhe.conversa.id}
+                detalhe={detalhe}
+                apoio={apoio}
+                meuMembroId={s.membro.id}
+                organizacaoId={s.organizacao.id}
+                operacional={operacional?.data || null}
+                respostas={respostas}
+                fuso={s.organizacao.fuso_horario}
+              />
+            ) : (
+              <div className="flex h-full flex-col items-center justify-center gap-3 p-8 text-center">
+                <MessageSquare className="text-produto-700" size={32} />
+                <h2 className="text-lg font-semibold">Seu próximo atendimento começa aqui</h2>
+                <p className="max-w-sm text-sm text-bruma-600">Selecione uma conversa para responder e organizar a próxima ação.</p>
+                <SincronizadorLista organizacaoId={s.organizacao.id} />
+              </div>
+            )}
           </div>
-        )}
-      </div>
+        }
+      />
       {detalhe && (
         <aside className="contexto-atendimento">
           <ContextoContato

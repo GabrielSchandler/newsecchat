@@ -118,6 +118,13 @@ export interface ProvedorMensageria {
   /** Baixa o conteúdo de uma mídia recebida. */
   baixarMidia(canal: CanalDeEnvio, midia: MidiaRecebida): Promise<Buffer>;
 
+  /**
+   * URL da foto de perfil do contato no WhatsApp, se o provedor souber e
+   * o contato permitir. `null` quando não há foto ou ela está restrita —
+   * não é erro, é a resposta normal para quem escondeu a própria foto.
+   */
+  buscarFotoPerfil(canal: CanalDeEnvio, telefone: string): Promise<string | null>;
+
   configurarWebhook(canal: CanalDeEnvio, urlWebhook: string): Promise<void>;
 
   /** Traduz a carga bruta do webhook. Nunca lança: no pior caso devolve IGNORADO. */

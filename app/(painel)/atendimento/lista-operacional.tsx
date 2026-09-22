@@ -16,8 +16,8 @@ import {
   type ContagensAtendimento,
   type EscopoAtendimento,
 } from '@/lib/operacao/atendimento';
-import { iniciais, tempoRelativo } from '@/lib/utilitarios';
-import { Situacao } from '@/componentes/operacao/compartilhados';
+import { tempoRelativo } from '@/lib/utilitarios';
+import { Avatar, Situacao } from '@/componentes/operacao/compartilhados';
 import type { PapelMembro } from '@/lib/tipos-banco';
 import type { ApoioAtendimento } from './tipos';
 import { definirConversaAbrindo, useConversaAbrindo } from './abrindo';
@@ -90,12 +90,20 @@ export function ListaOperacional({
 
   return (
     <>
+      {/*
+        Cabeçalho, abas e filtros rolam JUNTO com a lista, num único
+        container — não ficam fixos no topo. Numa tela baixa, isso é o que
+        deixa a lista de conversas aparecer: descendo o scroll, os filtros
+        saem de vista e sobra altura para mais linhas. Só o rodapé de
+        paginação, logo abaixo, fica de fato fixo.
+      */}
+      <div className="min-h-0 flex-1 overflow-y-auto rolagem-fina">
       <div className="px-3 pt-3">
         <h1 className="mb-2 text-lg font-semibold">Atendimento</h1>
 
         <nav
           aria-label="De quem são as conversas"
-          className="grid gap-1 rounded-lg bg-bruma-50 p-1"
+          className="grid gap-1 rounded-2xl bg-bruma-50 p-1"
           style={{ gridTemplateColumns: `repeat(${abas.length}, minmax(0, 1fr))` }}
         >
           {abas.map((aba) => {
@@ -218,7 +226,6 @@ export function ListaOperacional({
         </p>
       </div>
 
-      <div className="min-h-0 flex-1 overflow-y-auto rolagem-fina">
         <ul>
           {itens.map((item) => (
             <li key={item.id}>
@@ -230,7 +237,7 @@ export function ListaOperacional({
                 aria-current={conversaAberta === item.id ? 'true' : undefined}
                 data-abrindo={abrindo === item.id && conversaAberta !== item.id ? 'true' : undefined}
               >
-                <span className="avatar">{iniciais(item.contato_nome)}</span>
+                <Avatar nome={item.contato_nome} foto={item.contato_foto}/>
                 <span className="min-w-0 flex-1">
                   <span className="flex items-center justify-between gap-1">
                     <span className={'truncate text-[12px] ' + (item.nao_lidas > 0 ? 'font-bold' : 'font-semibold')}>

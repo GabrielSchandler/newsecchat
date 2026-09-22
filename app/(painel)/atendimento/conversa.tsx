@@ -34,7 +34,8 @@ import {
   Dialogo,
   RodapeDialogo,
 } from '@/componentes/ui/dialogo';
-import { cn, iniciais, formatarEspera, formatarHora, formatarDataHora } from '@/lib/utilitarios';
+import { cn, formatarEspera, formatarHora, formatarDataHora } from '@/lib/utilitarios';
+import { Avatar } from '@/componentes/operacao/compartilhados';
 import { formatarTelefone } from '@/lib/nucleo/telefone';
 import { rotuloEstado } from '@/lib/nucleo/estados';
 import type { Mensagem } from '@/lib/tipos-banco';
@@ -269,19 +270,29 @@ ${textoAtual.current}` : conteudo);
   return (
     <section className="flex h-full min-w-0 flex-col bg-white">
       <header className="flex flex-wrap items-center justify-between gap-2 border-b border-bruma-200 bg-white px-4 py-2.5">
-        <div className="flex min-w-0 items-center gap-2.5"><span className="avatar !bg-[#5794e6]">{iniciais(nome)}</span><div className="min-w-0">
-          <div className="flex items-center gap-2">
-            <Link href={"/atendimento?"+voltar} aria-label="Voltar à fila" className="md:hidden"><ArrowLeft size={19}/></Link>
-            <h2 className="truncate text-[15px] font-semibold text-tinta-900">{nome}</h2>
-            <SeloEstado estado={conversa.estado} />
-          </div>
-          <p className="mt-0.5 truncate text-[12px] text-bruma-600">
-            {formatarTelefone(contato.telefone)}
-            {detalhe.canal ? ` · ${detalhe.canal.nome}` : ''}
-            {detalhe.responsavelNome ? ` · ${detalhe.responsavelNome}` : ''}
-            {detalhe.campanhaNome ? ` · veio da campanha "${detalhe.campanhaNome}"` : ''}
-          </p>
-        </div></div>
+        <div className="flex min-w-0 items-center gap-1.5">
+          <Link href={"/atendimento?"+voltar} aria-label="Voltar à fila" className="shrink-0 md:hidden"><ArrowLeft size={19}/></Link>
+          <button
+            type="button"
+            onClick={() => definirContextoAberto(true)}
+            className="flex min-w-0 items-center gap-2.5 rounded-lg py-0.5 pr-2 text-left hover:bg-bruma-50"
+            title="Ver informações do contato"
+          >
+            <Avatar nome={nome} foto={contato.foto_url} cor="#5794e6"/>
+            <div className="min-w-0">
+              <div className="flex items-center gap-2">
+                <h2 className="truncate text-[15px] font-semibold text-tinta-900">{nome}</h2>
+                <SeloEstado estado={conversa.estado} />
+              </div>
+              <p className="mt-0.5 truncate text-[12px] text-bruma-600">
+                {formatarTelefone(contato.telefone)}
+                {detalhe.canal ? ` · ${detalhe.canal.nome}` : ''}
+                {detalhe.responsavelNome ? ` · ${detalhe.responsavelNome}` : ''}
+                {detalhe.campanhaNome ? ` · veio da campanha "${detalhe.campanhaNome}"` : ''}
+              </p>
+            </div>
+          </button>
+        </div>
 
         <div className="flex flex-wrap items-center gap-1.5">
           <button className="botao-link min-[1400px]:hidden" onClick={() => definirContextoAberto(true)} aria-label="Abrir contexto do contato"><UserRound size={16}/></button>
@@ -393,6 +404,7 @@ ${textoAtual.current}` : conteudo);
               key={item.id}
               mensagem={item.m}
               nomeContato={nome}
+              fotoContato={contato.foto_url}
               fuso={fuso}
               anterior={visiveis[visiveis.findIndex(m=>m.id===item.id)-1]??null}
             />
@@ -505,7 +517,7 @@ function SeloEstado({ estado }: { estado: DetalheConversa['conversa']['estado'] 
   return <Selo tom={tons[estado]}>{rotuloEstado[estado]}</Selo>;
 }
 
-function BalaoMensagem({ mensagem, anterior,nomeContato,fuso }: { mensagem: Mensagem; anterior: Mensagem | null;nomeContato:string;fuso:string }) {
+function BalaoMensagem({ mensagem, anterior,nomeContato,fotoContato,fuso }: { mensagem: Mensagem; anterior: Mensagem | null;nomeContato:string;fotoContato?:string|null;fuso:string }) {
   const daEmpresa = mensagem.direcao === 'SAIDA';
   const daIa = mensagem.autor === 'IA';
 
@@ -537,7 +549,7 @@ function BalaoMensagem({ mensagem, anterior,nomeContato,fuso }: { mensagem: Mens
       ) : null}
 
       <li className={cn('flex items-start gap-2 py-2', daEmpresa ? 'justify-end' : 'justify-start')}>
-        {!daEmpresa&&<span className="avatar avatar-pequeno !bg-[#5794e6]">{iniciais(nomeContato)}</span>}
+        {!daEmpresa&&<Avatar nome={nomeContato} foto={fotoContato} pequeno cor="#5794e6"/>}
         <div className="max-w-[85%]"><p className={cn('mb-1 text-[10px] text-bruma-600',daEmpresa&&'text-right')}>{daEmpresa?(mensagem.remetente_nome|| (daIa?'Assistente IA':'Consultor')):nomeContato} · {formatarHora(mensagem.criado_em,fuso)}</p><div
           className={cn(
             'balao !max-w-full',

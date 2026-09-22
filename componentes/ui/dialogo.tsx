@@ -31,7 +31,9 @@ export function ConteudoDialogo({
         )}
         {...resto}
       >
-        <div className="flex items-start justify-between gap-4 border-b border-bruma-200 px-5 py-4">
+        {/* Fixo no topo do conteúdo que rola: numa ficha longa, o X continua
+            alcançável sem subir tudo até o topo primeiro. */}
+        <div className="sticky top-0 z-10 flex items-start justify-between gap-4 border-b border-bruma-200 bg-white px-5 py-4">
           <div className="min-w-0">
             <DialogoRadix.Title className="text-[15px] font-semibold text-tinta-900">
               {titulo}

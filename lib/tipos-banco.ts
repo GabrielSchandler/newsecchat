@@ -177,6 +177,8 @@ export type Contato = {
   email: string | null;
   documento: string | null;
   origem: string | null;
+  /** URL da foto de perfil do WhatsApp, importada automaticamente. `null` até a primeira importação (ou se o contato não tem foto pública). */
+  foto_url: string | null;
   responsavel_id: string | null;
   departamento_id: string | null;
   resumo: string | null;

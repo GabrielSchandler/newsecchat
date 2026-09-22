@@ -114,6 +114,11 @@ export class ProvedorSimulado implements ProvedorMensageria {
     return Buffer.from(`conteudo-simulado:${midia.referencia}`, 'utf8');
   }
 
+  async buscarFotoPerfil(): Promise<string | null> {
+    // Ambiente fictício: nunca há foto de verdade para trazer.
+    return null;
+  }
+
   interpretarEvento(carga: unknown): EventoNormalizado {
     // No simulado, a carga já chega no formato normalizado.
     if (carga && typeof carga === 'object' && 'tipo' in carga) {

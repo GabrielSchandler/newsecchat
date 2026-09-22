@@ -107,6 +107,20 @@
   .item-menu { @apply mb-1 flex min-h-10 items-center gap-3 rounded-md border-l-[3px] border-transparent px-2.5 py-2 text-[12px] transition-colors hover:bg-white/10; }
   .item-menu-ativo { @apply border-[#00CCF2] bg-[#07607E] font-semibold hover:bg-[#07607E]; }
   .perfil-navegacao { @apply border-t border-white/10 px-3 py-4; }
+  /* Menu recolhido: só os ícones, largura mínima. Só entra em vigor no
+     desktop — abaixo de 1024px a barra é sempre a gaveta que se sobrepõe
+     ao conteúdo, e "recolhida" não faz sentido nela. */
+  @media (min-width:1024px) {
+    .barra-navegacao[data-recolhida=true] { width: 68px; }
+    .barra-navegacao[data-recolhida=true] .marca-aplicacao strong,
+    .barra-navegacao[data-recolhida=true] .marca-aplicacao span,
+    .barra-navegacao[data-recolhida=true] .item-menu span,
+    .barra-navegacao[data-recolhida=true] .menu-secundario,
+    .barra-navegacao[data-recolhida=true] .perfil-navegacao summary span,
+    .barra-navegacao[data-recolhida=true] .perfil-navegacao summary > svg:last-child { display:none; }
+    .barra-navegacao[data-recolhida=true] .item-menu { justify-content:center; }
+    .barra-navegacao[data-recolhida=true] .perfil-navegacao summary { justify-content:center; }
+  }
   .avatar { @apply inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#6F869C] text-sm font-semibold text-white; }
   .avatar-pequeno { @apply h-8 w-8 text-[11px]; }
   .avatar-grande { @apply h-16 w-16 text-2xl; }
@@ -130,13 +144,20 @@
   .abas-operacionais a, .abas-operacionais button { @apply whitespace-nowrap border-b-2 border-transparent px-4 py-3 text-[12px] text-tinta-700; }
   .abas-operacionais [aria-current=page], .abas-operacionais [aria-selected=true] { @apply border-produto-500 font-semibold text-produto-800; }
   .central-atendimento { @apply flex h-full min-h-0 overflow-hidden bg-white; }
-  .lista-atendimento { @apply flex h-full w-[320px] shrink-0 flex-col border-r; }
+  /* A largura vem de --largura-lista (ver colunas.tsx); a variável, não um
+     estilo inline direto, é o que deixa a media query abaixo assumir o
+     controle no celular sem precisar de !important. */
+  .lista-atendimento { @apply flex h-full shrink-0 flex-col; width: var(--largura-lista, 320px); }
+  .divisor-atendimento { @apply relative w-2 shrink-0 cursor-col-resize touch-none; }
+  .divisor-atendimento::after { content:''; @apply absolute inset-y-0 left-1/2 w-px -translate-x-1/2 bg-bruma-200 transition-colors; }
+  .divisor-atendimento:hover::after, .divisor-atendimento:focus-visible::after { @apply w-0.5 bg-produto-500; }
+  .divisor-atendimento:focus-visible { @apply outline-none; }
   .conversa-atendimento { @apply relative min-w-0 flex-1; }
-  .aba-escopo { @apply flex min-w-0 flex-col items-center justify-center gap-0.5 rounded-md border border-transparent px-1 py-1.5 text-center text-[11px] font-medium leading-tight text-tinta-700 hover:bg-bruma-100; }
+  .aba-escopo { @apply flex min-w-0 flex-col items-center justify-center gap-0.5 rounded-xl border border-transparent px-1 py-1.5 text-center text-[11px] font-medium leading-tight text-tinta-700 hover:bg-bruma-100; }
   .aba-escopo strong { @apply text-[15px] font-semibold leading-none tabular-nums; }
   .aba-escopo[aria-current=true] { @apply border-produto-500 bg-produto-50 text-produto-800; }
   .contexto-atendimento { @apply hidden h-full w-[270px] shrink-0 overflow-y-auto border-l bg-white min-[1400px]:block; }
-  .filtro-fila { @apply inline-flex items-center justify-center gap-1.5 rounded border bg-bruma-50 px-2 py-1.5 text-[11px] font-medium; }
+  .filtro-fila { @apply inline-flex items-center justify-center gap-1.5 rounded-xl border bg-bruma-50 px-2 py-1.5 text-center text-[11px] font-medium; }
   .filtro-fila[aria-current=true] { @apply border-produto-700 bg-produto-700 text-white; }
   .item-conversa { @apply mx-1.5 flex gap-2.5 rounded-md border border-transparent px-2.5 py-3 hover:bg-bruma-50; }
   .item-conversa[aria-current=true] { @apply border-produto-500 bg-produto-50; }
@@ -153,7 +174,8 @@
   @media (max-width:767px) {
     .central-atendimento[data-aberta=true] .lista-atendimento { display:none; }
     .central-atendimento[data-aberta=false] .conversa-atendimento { display:none; }
-    .lista-atendimento { @apply w-full; }
+    .lista-atendimento { width:100%; }
+    .divisor-atendimento { display:none; }
     .balao { max-width:90%; }
     .pagina-operacional { @apply p-3; }
     .tabela-operacional { min-width:580px; }

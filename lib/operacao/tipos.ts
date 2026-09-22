@@ -18,7 +18,7 @@ export type RespostaRapida = {
 };
 export type FilaOperacional = Conversa & {
   alerta_resposta:boolean; falha_ia:boolean|null; ultimo_autor_membro:string|null; envio_incerto:boolean;
-  contato_nome: string; contato_telefone: string; contato_email: string | null;
+  contato_nome: string; contato_telefone: string; contato_email: string | null; contato_foto: string | null;
   canal_nome: string; canal_status: string; equipe_nome: string | null;
   responsavel_nome: string | null; ultimo_autor: string | null;
   ultimo_publico_em: string | null; ultimo_texto: string | null;

@@ -1,10 +1,19 @@
+'use client';
+import * as React from 'react';
 import Link from 'next/link';
 import { ArrowRight, Clock3, MessageSquare, UserRound, TriangleAlert, Sparkles } from 'lucide-react';
 import { cn, iniciais, formatarEspera } from '@/lib/utilitarios';
 import { Selo } from '@/componentes/ui/estrutura';
 import { situacao, type FilaOperacional } from '@/lib/operacao/tipos';
-export function Identidade({ nome, telefone, pequeno=false }: { nome:string; telefone?:string; pequeno?:boolean }) {
-  return <span className="flex min-w-0 items-center gap-2.5"><span className={cn('avatar',pequeno&&'avatar-pequeno')}>{iniciais(nome)}</span><span className="min-w-0"><span className="block truncate font-semibold text-tinta-950">{nome}</span>{telefone&&<span className="mt-0.5 block text-[11px] font-normal text-bruma-600">{telefone}</span>}</span></span>;
+export function Identidade({ nome, telefone, foto, pequeno=false }: { nome:string; telefone?:string; foto?:string|null; pequeno?:boolean }) {
+  return <span className="flex min-w-0 items-center gap-2.5"><Avatar nome={nome} foto={foto} pequeno={pequeno}/><span className="min-w-0"><span className="block truncate font-semibold text-tinta-950">{nome}</span>{telefone&&<span className="mt-0.5 block text-[11px] font-normal text-bruma-600">{telefone}</span>}</span></span>;
+}
+/** Foto do contato quando existe (importada do WhatsApp); iniciais como fallback — inclusive se a imagem falhar ao carregar. */
+export function Avatar({ nome, foto, pequeno=false, grande=false, cor }: { nome:string; foto?:string|null; pequeno?:boolean; grande?:boolean; cor?:string }) {
+  const [falhou,setFalhou]=React.useState(false);
+  const tamanho=cn(pequeno&&'avatar-pequeno',grande&&'avatar-grande');
+  if (foto && !falhou) return <img src={foto} alt="" className={cn('avatar object-cover',tamanho)} onError={()=>setFalhou(true)}/>;
+  return <span className={cn('avatar',tamanho)} style={cor?{backgroundColor:cor}:undefined}>{iniciais(nome)}</span>;
 }
 export function Situacao({item}:{item:FilaOperacional}){const s=situacao(item);return <Selo tom={s.tom}>{s.texto}</Selo>;}
 export function Metricas({contagens,filtros={}}:{contagens:Record<string,number>;filtros?:{equipe?:string;canal?:string;responsavel?:string}}) {
@@ -13,5 +22,5 @@ export function Metricas({contagens,filtros={}}:{contagens:Record<string,number>
   return <div className="metricas-operacionais">{items.map(([chave,rotulo,Icone,cor])=><Link key={chave} href={'/atendimento?'+query+'&caixa='+chave} className="metrica group"><span className={cn('metrica-icone',cor)}><Icone size={23}/></span><div><p className="text-[12px] text-bruma-600">{rotulo}</p><p className="text-[25px] font-semibold leading-tight tabular-nums">{contagens[chave]||0}</p></div><ArrowRight size={14} className="ml-auto text-produto-700 opacity-0 group-hover:opacity-100"/></Link>)}</div>;
 }
 export function FilaTabela({itens,acao='Abrir',destino}:{itens:FilaOperacional[];acao?:string;destino?:(id:string)=>string}) {
-  return <div className="tabela-container" role="region" aria-label="Fila de atendimentos" tabIndex={0}><table className="tabela-operacional"><thead><tr><th>Contato</th><th>Equipe</th><th>Responsável</th><th>Situação</th><th>Espera</th><th>Ação</th></tr></thead><tbody>{itens.map(i=><tr key={i.id}><td><Identidade nome={i.contato_nome} pequeno/></td><td>{i.equipe_nome||'Sem equipe'}</td><td>{i.responsavel_nome||'Sem responsável'}</td><td><Situacao item={i}/></td><td className={i.resposta_vencida?'font-semibold text-marca-600':''}>{i.espera_desde?formatarEspera(i.espera_desde):'—'}</td><td><Link className="botao-link" href={destino?destino(i.id):`/atendimento?conversa=${i.id}`}>{acao}<MessageSquare size={13}/></Link></td></tr>)}</tbody></table>{!itens.length&&<p className="px-4 py-10 text-center text-sm text-bruma-600">Nenhuma conversa para estes filtros.</p>}</div>;
+  return <div className="tabela-container" role="region" aria-label="Fila de atendimentos" tabIndex={0}><table className="tabela-operacional"><thead><tr><th>Contato</th><th>Equipe</th><th>Responsável</th><th>Situação</th><th>Espera</th><th>Ação</th></tr></thead><tbody>{itens.map(i=><tr key={i.id}><td><Identidade nome={i.contato_nome} foto={i.contato_foto} pequeno/></td><td>{i.equipe_nome||'Sem equipe'}</td><td>{i.responsavel_nome||'Sem responsável'}</td><td><Situacao item={i}/></td><td className={i.resposta_vencida?'font-semibold text-marca-600':''}>{i.espera_desde?formatarEspera(i.espera_desde):'—'}</td><td><Link className="botao-link" href={destino?destino(i.id):`/atendimento?conversa=${i.id}`}>{acao}<MessageSquare size={13}/></Link></td></tr>)}</tbody></table>{!itens.length&&<p className="px-4 py-10 text-center text-sm text-bruma-600">Nenhuma conversa para estes filtros.</p>}</div>;
 }

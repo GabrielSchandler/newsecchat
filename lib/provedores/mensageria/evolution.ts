@@ -285,6 +285,21 @@ export class ProvedorEvolution implements ProvedorMensageria {
     return Buffer.from(base64.replace(/^data:[^;]+;base64,/, ''), 'base64');
   }
 
+  async buscarFotoPerfil(canal: CanalDeEnvio, telefone: string): Promise<string | null> {
+    const numero = normalizarTelefone(telefone);
+    if (!numero) return null;
+
+    // A Evolution devolve 404 (via aceitar404) para número sem WhatsApp
+    // ou instância desconectada; erro de rede sobe normalmente — quem
+    // chama decide se tenta de novo.
+    const resposta = await this.chamar<Record<string, unknown>>(
+      `/chat/fetchProfilePictureUrl/${encodeURIComponent(canal.identificador_externo)}`,
+      { metodo: 'POST', corpo: { number: numero }, aceitar404: true },
+    );
+
+    return lerTexto(resposta, ['profilePictureUrl']);
+  }
+
   interpretarEvento(carga: unknown): EventoNormalizado {
     try {
       return interpretar(carga);

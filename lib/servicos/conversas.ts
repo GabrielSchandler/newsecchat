@@ -14,6 +14,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { BancoDados, Canal, Contato, Conversa, TipoMensagem } from '@/lib/tipos-banco';
 import { variantesBrasil } from '@/lib/nucleo/telefone';
+import { obterProvedorMensageria } from '@/lib/provedores/mensageria/indice';
 import { log } from '@/lib/log';
 
 type Cliente = SupabaseClient<BancoDados>;
@@ -27,13 +28,52 @@ export interface DadosContato {
 }
 
 /**
+ * Melhor esforço: importa a foto de perfil do WhatsApp para um contato
+ * que ainda não tem uma. Nunca lança — se a Evolution estiver fora do ar
+ * ou o número não tiver foto pública, a mensagem chega do mesmo jeito e o
+ * avatar continua mostrando as iniciais.
+ */
+async function importarFotoSeFaltando(
+  cliente: Cliente,
+  canal: Canal | undefined,
+  contato: Contato,
+): Promise<Contato> {
+  if (!canal || contato.foto_url) return contato;
+
+  try {
+    const provedor = obterProvedorMensageria(canal.provedor);
+    const foto = await provedor.buscarFotoPerfil(canal, contato.telefone);
+    if (!foto) return contato;
+
+    const { data: atualizado } = await cliente
+      .from('contatos')
+      .update({ foto_url: foto })
+      .eq('id', contato.id)
+      .eq('organizacao_id', contato.organizacao_id)
+      .select('*')
+      .maybeSingle();
+
+    return atualizado ?? contato;
+  } catch (erro) {
+    log.warn('Não foi possível importar a foto do contato', {
+      contato_id: contato.id,
+      erro: erro instanceof Error ? erro.message : String(erro),
+    });
+    return contato;
+  }
+}
+
+/**
  * Encontra o contato pelo telefone, aceitando as variações do nono
- * dígito. Cria se não existir.
+ * dígito. Cria se não existir. `canal` é opcional e serve só para
+ * importar a foto de perfil — quem não tiver um canal à mão (ex.: import
+ * de planilha) segue funcionando sem foto.
  */
 export async function resolverContato(
   cliente: Cliente,
   organizacaoId: string,
   dados: DadosContato,
+  canal?: Canal,
 ): Promise<Contato> {
   const variantes = variantesBrasil(dados.telefone);
   if (variantes.length === 0) {
@@ -64,7 +104,7 @@ export async function resolverContato(
         .eq('id', existente.id)
         .eq('organizacao_id', organizacaoId);
     }
-    return existente;
+    return importarFotoSeFaltando(cliente, canal, existente);
   }
 
   const telefoneCanonico = variantes[0] as string;
@@ -91,12 +131,12 @@ export async function resolverContato(
         .eq('telefone', telefoneCanonico)
         .single();
 
-      if (recuperado) return recuperado;
+      if (recuperado) return importarFotoSeFaltando(cliente, canal, recuperado);
     }
     throw new Error(`Falha ao criar contato: ${erroCriacao.message}`);
   }
 
-  return criado;
+  return importarFotoSeFaltando(cliente, canal, criado);
 }
 
 /** Conversa aberta do contato neste canal. Cria se não houver. */
